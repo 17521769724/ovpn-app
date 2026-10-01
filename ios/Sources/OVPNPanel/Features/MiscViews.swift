@@ -448,7 +448,6 @@ struct AccountSettingsView: View {
     @State private var notice = ""
 
     var body: some View {
-        let palette = Palette(scheme: scheme)
         ScrollView {
             VStack(spacing: DS.Size.gapLarge) {
                 if !error.isEmpty { BannerBar(message: error) }

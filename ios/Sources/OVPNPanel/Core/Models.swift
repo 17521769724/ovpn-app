@@ -367,8 +367,8 @@ enum Format {
         return "\(kbps) Kbps"
     }
 
-    static func traffic(_ bytes: Int64) -> String {
-        bytes <= 0 ? "不限量" : bytes(bytes)
+    static func traffic(_ value: Int64) -> String {
+        value <= 0 ? "不限量" : bytes(value)
     }
 
     /// ISO8601 → 简短本地时间

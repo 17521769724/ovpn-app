@@ -33,6 +33,7 @@ jobs:
         working-directory: ios
         run: |
           set -o pipefail
+          STATUS=0
           xcodebuild \
             -project OVPNPanel.xcodeproj \
             -scheme OVPNPanel \
@@ -40,7 +41,12 @@ jobs:
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tail -150
+            build 2>&1 | tee /tmp/xcodebuild.log | tail -40 || STATUS=$?
+          echo "=== 编译错误汇总 ==="
+          grep -E ": error:" /tmp/xcodebuild.log || echo "(无 error)"
+          echo "=== 编译警告汇总 ==="
+          grep -E ": warning:" /tmp/xcodebuild.log | grep -v "deprecated" | head -30 || true
+          exit $STATUS
 
       - name: 打包为未签名 IPA（巨魔自签安装）
         working-directory: ios
