@@ -10,10 +10,15 @@ options:
   createIntermediateGroups: true
   groupSortPosition: top
 
+packages:
+  TunnelKit:
+    url: https://github.com/partout-io/tunnelkit
+    exactVersion: 6.3.2
+
 settings:
   base:
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "2"
     SWIFT_VERSION: "5.0"
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     CLANG_ENABLE_MODULES: YES
@@ -27,6 +32,12 @@ targets:
       - path: Sources/OVPNPanel
         excludes:
           - "Info.plist"
+    dependencies:
+      - target: OVPNTunnel
+      - package: TunnelKit
+        product: TunnelKitOpenVPN
+      - package: TunnelKit
+        product: TunnelKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ovpn.panel
@@ -37,6 +48,40 @@ targets:
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
+        CODE_SIGN_ENTITLEMENTS: Entitlements/OVPNPanel.entitlements
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
+        ONLY_ACTIVE_ARCH: NO
+        ARCHS: arm64
+
+  # 数据包隧道扩展（OpenVPN 内核，基于 TunnelKit）
+  OVPNTunnel:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Tunnel
+        excludes:
+          - "Info.plist"
+    dependencies:
+      - package: TunnelKit
+        product: TunnelKitOpenVPNAppExtension
+      - package: TunnelKit
+        product: TunnelKit
+    info:
+      path: Tunnel/Info.plist
+      properties:
+        CFBundleDisplayName: OVPN Tunnel
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ovpn.panel.tunnel
+        PRODUCT_NAME: OVPNTunnel
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGN_ENTITLEMENTS: Entitlements/OVPNTunnel.entitlements
         SWIFT_OPTIMIZATION_LEVEL: "-O"
         ONLY_ACTIVE_ARCH: NO
         ARCHS: arm64

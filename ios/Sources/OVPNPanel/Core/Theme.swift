@@ -80,6 +80,65 @@ enum DS {
         static let warningText = Color(hex: 0xB45309)
         static let infoText = Color(hex: 0x2563EB)
     }
+
+    // MARK: - 流量绿（对应 Web 端 emerald 色板，流量统计统一纯绿色）
+    enum Traffic {
+        static let bar = Color(hex: 0x10B981)        // emerald-500
+        static let barStrong = Color(hex: 0x059669)  // emerald-600
+        static let barSoft = Color(hex: 0x6EE7B7)    // emerald-300
+        static let tracker = Color(hex: 0xD1FAE5)    // emerald-100
+    }
+
+    // MARK: - 提示横幅配色（对齐 Web 端 sonner richColors）
+    struct ToastStyle {
+        let background: Color
+        let border: Color
+        let foreground: Color
+        let icon: String
+
+        static func of(_ kind: BannerKind, dark: Bool) -> ToastStyle {
+            switch (kind, dark) {
+            case (.success, false):
+                return ToastStyle(background: Color(hex: 0xECFDF5), border: Color(hex: 0xA7F3D0),
+                                  foreground: Color(hex: 0x047857), icon: "checkmark.circle.fill")
+            case (.success, true):
+                return ToastStyle(background: Color(hex: 0x001A0F), border: Color(hex: 0x065F46),
+                                  foreground: Color(hex: 0x4ADE80), icon: "checkmark.circle.fill")
+            case (.error, false):
+                return ToastStyle(background: Color(hex: 0xFEF2F2), border: Color(hex: 0xFECACA),
+                                  foreground: Color(hex: 0xE7000B), icon: "octagon.fill")
+            case (.error, true):
+                return ToastStyle(background: Color(hex: 0x2D0607), border: Color(hex: 0x7F1D1D),
+                                  foreground: Color(hex: 0xFF9B9D), icon: "octagon.fill")
+            case (.warning, false):
+                return ToastStyle(background: Color(hex: 0xFEFCE8), border: Color(hex: 0xFEF08A),
+                                  foreground: Color(hex: 0xB45309), icon: "exclamationmark.triangle.fill")
+            case (.warning, true):
+                return ToastStyle(background: Color(hex: 0x1C1A00), border: Color(hex: 0x854D0E),
+                                  foreground: Color(hex: 0xFCD34D), icon: "exclamationmark.triangle.fill")
+            case (.info, false):
+                return ToastStyle(background: Color(hex: 0xF0F9FF), border: Color(hex: 0xBAE6FD),
+                                  foreground: Color(hex: 0x0369A1), icon: "info.circle.fill")
+            case (.info, true):
+                return ToastStyle(background: Color(hex: 0x001B33), border: Color(hex: 0x1E40AF),
+                                  foreground: Color(hex: 0x60A5FA), icon: "info.circle.fill")
+            }
+        }
+    }
+
+    // MARK: - 功能图标配色（多色美化，个人中心/入口通用）
+    enum IconColor {
+        static let blue = Color(hex: 0x3B82F6)
+        static let indigo = Color(hex: 0x6366F1)
+        static let violet = Color(hex: 0x8B5CF6)
+        static let emerald = Color(hex: 0x10B981)
+        static let teal = Color(hex: 0x14B8A6)
+        static let amber = Color(hex: 0xF59E0B)
+        static let orange = Color(hex: 0xF97316)
+        static let rose = Color(hex: 0xF43F5E)
+        static let sky = Color(hex: 0x0EA5E9)
+        static let slate = Color(hex: 0x64748B)
+    }
 }
 
 // MARK: - 语义色（跟随系统明暗）
@@ -111,6 +170,15 @@ struct Palette {
     var pendingText: Color { isDark ? DS.Dark.mutedForeground : DS.Status.pendingText }
     var warningBg: Color { DS.Status.warningBg }
     var warningText: Color { isDark ? Color(hex: 0xFBBF24) : DS.Status.warningText }
+
+    /// 次级文字：比 mutedForeground 更深，保证手机上的可读性
+    var secondaryText: Color { isDark ? Color(hex: 0xD4D4D4) : Color(hex: 0x404040) }
+
+    /// 流量统计统一纯绿色
+    var trafficBar: Color { DS.Traffic.bar }
+    var trafficTracker: Color { isDark ? Color(hex: 0x064E3B) : DS.Traffic.tracker }
+
+    func toastStyle(_ kind: BannerKind) -> DS.ToastStyle { DS.ToastStyle.of(kind, dark: isDark) }
 }
 
 extension Color {

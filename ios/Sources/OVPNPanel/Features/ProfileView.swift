@@ -8,16 +8,14 @@ struct ProfileView: View {
     @State private var center: UserCenterPayload?
     @State private var traffic: TrafficPayload?
     @State private var loading = true
-    @State private var error = ""
     @State private var showLogout = false
+    @State private var unreadCount = 0
 
     var body: some View {
         let palette = Palette(scheme: scheme)
         ScrollView {
             VStack(spacing: DS.Size.gapLarge) {
                 userCard(palette)
-
-                if !error.isEmpty { BannerBar(message: error) }
 
                 trafficCard(palette)
                 sessionCard(palette)
@@ -28,7 +26,7 @@ struct ProfileView: View {
                 }
                 .padding(.top, 4)
 
-                Text("客户端 v1.0.0 · \(app.masterURL)")
+                Text("客户端 v\(AppInfo.version) (Build \(AppInfo.build)) · \(app.masterURL)")
                     .font(DS.Font.caption)
                     .foregroundStyle(palette.mutedForeground)
                     .multilineTextAlignment(.center)
@@ -54,12 +52,15 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
                     Circle()
-                        .fill(palette.muted)
+                        .fill(
+                            LinearGradient(colors: [DS.IconColor.emerald, DS.IconColor.teal],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
                         .frame(width: 48, height: 48)
                         .overlay(
                             Text(String(app.user?.username.prefix(1) ?? "U").uppercased())
                                 .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(palette.foreground)
+                                .foregroundStyle(.white)
                         )
                     VStack(alignment: .leading, spacing: 3) {
                         Text(app.user?.username ?? "-")
@@ -67,7 +68,7 @@ struct ProfileView: View {
                             .foregroundStyle(palette.foreground)
                         Text(app.user?.email ?? "未绑定邮箱")
                             .font(DS.Font.caption)
-                            .foregroundStyle(palette.mutedForeground)
+                            .foregroundStyle(palette.secondaryText)
                     }
                     Spacer()
                     if let center {
@@ -94,35 +95,41 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - 流量
+    // MARK: - 流量（纯绿色统计，与 Web 端一致）
 
     private func trafficCard(_ palette: Palette) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "流量使用", subtitle: "近 15 天")
+                HStack(spacing: 10) {
+                    IconTile(icon: "chart.bar.fill", color: DS.Traffic.barStrong)
+                    SectionHeader(title: "流量使用", subtitle: "近 15 天")
+                }
 
                 if let center {
                     let used = center.traffic.usedBytes
                     let limit = center.traffic.limitBytes
                     HStack(alignment: .firstTextBaseline) {
                         Text(Format.bytes(used)).font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(palette.foreground)
+                            .foregroundStyle(DS.Traffic.barStrong)
                         Text(limit > 0 ? "/ \(Format.bytes(limit))" : "/ 不限量")
                             .font(DS.Font.bodySmall)
-                            .foregroundStyle(palette.mutedForeground)
+                            .foregroundStyle(palette.secondaryText)
                         Spacer()
                         if limit > 0 {
                             Text(String(format: "%.1f%%", center.traffic.percent))
                                 .font(DS.Font.number)
-                                .foregroundStyle(palette.mutedForeground)
+                                .foregroundStyle(DS.Traffic.barStrong)
                         }
                     }
                     if limit > 0 {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
-                                Capsule().fill(palette.muted)
+                                Capsule().fill(palette.trafficTracker)
                                 Capsule()
-                                    .fill(palette.primary.opacity(0.8))
+                                    .fill(
+                                        LinearGradient(colors: [DS.Traffic.bar, DS.Traffic.barStrong],
+                                                       startPoint: .leading, endPoint: .trailing)
+                                    )
                                     .frame(width: max(0, min(1, center.traffic.percent / 100)) * geo.size.width)
                             }
                         }
@@ -136,14 +143,22 @@ struct ProfileView: View {
                     HStack {
                         Text("合计 \(Format.bytes(traffic.totalBytes))")
                             .font(DS.Font.caption)
-                            .foregroundStyle(palette.mutedForeground)
+                            .foregroundStyle(palette.secondaryText)
                         Spacer()
-                        Text("上行 / 下行")
-                            .font(DS.Font.caption)
-                            .foregroundStyle(palette.mutedForeground)
+                        HStack(spacing: 10) {
+                            legend(color: DS.Traffic.bar, title: "上传")
+                            legend(color: DS.Traffic.barSoft, title: "下载")
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private func legend(color: Color, title: String) -> some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 10, height: 10)
+            Text(title).font(DS.Font.caption).foregroundStyle(DS.IconColor.slate)
         }
     }
 
@@ -152,12 +167,15 @@ struct ProfileView: View {
     private func sessionCard(_ palette: Palette) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "在线会话", subtitle: "当前账号的连接")
+                HStack(spacing: 10) {
+                    IconTile(icon: "antenna.radiowaves.left.and.right", color: DS.IconColor.sky)
+                    SectionHeader(title: "在线会话", subtitle: "当前账号的连接")
+                }
                 let sessions = center?.onlineSessions ?? []
                 if sessions.isEmpty {
                     Text("当前没有在线连接")
                         .font(DS.Font.bodySmall)
-                        .foregroundStyle(palette.mutedForeground)
+                        .foregroundStyle(palette.secondaryText)
                         .padding(.vertical, 6)
                 } else {
                     ForEach(sessions) { session in
@@ -187,66 +205,64 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - 功能入口
+    // MARK: - 功能入口（彩色图标 + 整行可点）
 
     private func menuCard(_ palette: Palette) -> some View {
         AppCard(padding: 0) {
             VStack(spacing: 0) {
-                menuRow(palette, icon: "megaphone", title: "公告", destination: AnyView(AnnouncementsView().environmentObject(app)))
+                menuRow(palette, icon: "megaphone.fill", color: DS.IconColor.rose, title: "公告",
+                        subtitle: unreadCount > 0 ? "有 \(unreadCount) 条未读" : nil,
+                        destination: AnyView(AnnouncementsView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "ticket", title: "激活码", destination: AnyView(ActivationView().environmentObject(app)))
+                menuRow(palette, icon: "ticket.fill", color: DS.IconColor.amber, title: "激活码",
+                        destination: AnyView(ActivationView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "bitcoinsign.circle", title: "金币与邀请", destination: AnyView(CoinsView().environmentObject(app)))
+                menuRow(palette, icon: "bitcoinsign.circle.fill", color: DS.IconColor.orange, title: "金币与邀请",
+                        destination: AnyView(CoinsView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "bubble.left.and.text.bubble.right", title: "问题反馈", destination: AnyView(FeedbackView().environmentObject(app)))
+                menuRow(palette, icon: "bubble.left.and.text.bubble.right.fill", color: DS.IconColor.blue, title: "问题反馈",
+                        destination: AnyView(FeedbackView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "doc.text", title: "我的订单", destination: AnyView(OrdersView().environmentObject(app)))
+                menuRow(palette, icon: "doc.text.fill", color: DS.IconColor.sky, title: "我的订单",
+                        destination: AnyView(OrdersView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "gearshape", title: "账号设置", destination: AnyView(AccountSettingsView().environmentObject(app)))
+                menuRow(palette, icon: "gearshape.fill", color: DS.IconColor.slate, title: "账号设置",
+                        destination: AnyView(AccountSettingsView().environmentObject(app)))
             }
         }
     }
 
-    private func menuRow(_ palette: Palette, icon: String, title: String, destination: AnyView) -> some View {
+    private func menuRow(_ palette: Palette, icon: String, color: Color, title: String,
+                         subtitle: String? = nil, destination: AnyView) -> some View {
         NavigationLink(destination: destination) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 15))
-                    .foregroundStyle(palette.foreground)
-                    .frame(width: 22)
-                Text(title).font(DS.Font.body).foregroundStyle(palette.foreground)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12))
-                    .foregroundStyle(palette.mutedForeground)
-            }
-            .padding(.horizontal, DS.Size.cardPadding)
-            .frame(height: 50)
+            MenuRow(icon: icon, iconColor: color, title: title, subtitle: subtitle)
         }
         .buttonStyle(.plain)
     }
 
     private func divider(_ palette: Palette) -> some View {
-        Rectangle().fill(palette.border).frame(height: 1).padding(.leading, 50)
+        Rectangle().fill(palette.border).frame(height: 1).padding(.leading, 58)
     }
 
     private func load() async {
-        error = ""
         loading = true
         defer { loading = false }
-        async let centerTask = APIClient.shared.fetchUserCenter()
-        async let trafficTask = APIClient.shared.fetchTraffic(days: 15)
         do {
-            center = try await centerTask
-            app.user = center?.user
+            let value = try await APIClient.shared.fetchUserCenter()
+            center = value
+            app.user = value.user
         } catch {
-            self.error = error.localizedDescription
+            if APIError.from(error).isCancelled { return }
+            app.report(error)
         }
-        traffic = try? await trafficTask
+        traffic = try? await APIClient.shared.fetchTraffic(days: 15)
+        if let announcements = try? await APIClient.shared.fetchAnnouncements() {
+            unreadCount = announcements.unreadCount
+        }
     }
 }
 
-/// 15 天流量柱状图（纯 SwiftUI 绘制，与 Web 端堆叠柱状图对应）
+/// 15 天流量柱状图（纯绿色，与 Web 端配色对齐）
 struct TrafficBars: View {
     let days: [TrafficDay]
     let palette: Palette
@@ -262,10 +278,10 @@ struct TrafficBars: View {
                         let height = max(2, geo.size.height * total)
                         VStack(spacing: 1) {
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(palette.primary.opacity(0.85))
+                                .fill(DS.Traffic.bar)
                                 .frame(height: max(1, height * (1 - rxRatio)))
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(palette.primary.opacity(0.35))
+                                .fill(DS.Traffic.barSoft)
                                 .frame(height: max(1, height * rxRatio))
                         }
                         .frame(maxHeight: .infinity, alignment: .bottom)
@@ -277,5 +293,16 @@ struct TrafficBars: View {
                 .frame(maxWidth: .infinity)
             }
         }
+    }
+}
+
+/// 版本信息（跟随构建号）
+enum AppInfo {
+    static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+    }
+
+    static var build: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
     }
 }

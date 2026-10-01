@@ -15,8 +15,10 @@ struct OVPNPanelApp: App {
 
 struct RootView: View {
     @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
+        let palette = Palette(scheme: scheme)
         ZStack {
             switch app.phase {
             case .setup:
@@ -27,20 +29,11 @@ struct RootView: View {
                 MainTabView()
             }
 
-            if let banner = app.banner {
-                VStack {
-                    Spacer()
-                    ToastView(message: banner)
-                }
-                .allowsHitTesting(false)
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
-                        if app.banner == banner { app.banner = nil }
-                    }
-                }
-            }
+            // 全局横幅提示（与 Web 端 toast 一致）
+            ToastHost()
         }
-        .animation(.easeInOut(duration: 0.18), value: app.banner)
+        // 全局统一导航/按钮色调：返回按钮与链接不再使用系统蓝色
+        .tint(palette.foreground)
     }
 }
 
@@ -51,10 +44,10 @@ struct MainTabView: View {
 
     @State private var tab: Int = 0
 
-    private let items: [(icon: String, title: String)] = [
-        ("bolt.horizontal.circle", "线路"),
-        ("shippingbox", "套餐"),
-        ("person.crop.circle", "我的"),
+    private let items: [(icon: String, activeIcon: String, title: String, color: Color)] = [
+        ("bolt.horizontal.circle", "bolt.horizontal.circle.fill", "线路", DS.IconColor.sky),
+        ("shippingbox", "shippingbox.fill", "套餐", DS.IconColor.violet),
+        ("person.crop.circle", "person.crop.circle.fill", "我的", DS.IconColor.emerald),
     ]
 
     var body: some View {
@@ -75,6 +68,7 @@ struct MainTabView: View {
             tabBar(palette)
         }
         .pageBackground()
+        .tint(palette.foreground)
     }
 
     private func tabBar(_ palette: Palette) -> some View {
@@ -84,13 +78,16 @@ struct MainTabView: View {
                     tab = index
                 } label: {
                     VStack(spacing: 3) {
-                        Image(systemName: item.icon)
-                            .font(.system(size: 18, weight: tab == index ? .semibold : .regular))
-                        Text(item.title).font(.system(size: 11))
+                        Image(systemName: tab == index ? item.activeIcon : item.icon)
+                            .font(.system(size: 19, weight: tab == index ? .semibold : .regular))
+                            .foregroundStyle(tab == index ? item.color : palette.mutedForeground)
+                        Text(item.title)
+                            .font(.system(size: 11, weight: tab == index ? .semibold : .regular))
+                            .foregroundStyle(tab == index ? palette.foreground : palette.mutedForeground)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: DS.Size.tabBarHeight)
-                    .foregroundStyle(tab == index ? palette.foreground : palette.mutedForeground)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

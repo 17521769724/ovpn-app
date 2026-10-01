@@ -6,6 +6,7 @@ enum APIError: LocalizedError {
     case network(String)
     case server(String)
     case decoding(String)
+    case cancelled
 
     var errorDescription: String? {
         switch self {
@@ -13,7 +14,25 @@ enum APIError: LocalizedError {
         case .network(let message): return message
         case .server(let message): return message
         case .decoding(let message): return "数据解析失败：\(message)"
+        case .cancelled: return "请求已取消"
         }
+    }
+
+    /// 网络请求被系统/下拉刷新取消时不应作为错误提示
+    var isCancelled: Bool {
+        if case .cancelled = self { return true }
+        return false
+    }
+
+    /// 归一化任意错误：取消类错误统一识别，避免误报
+    static func from(_ error: Error) -> APIError {
+        if error is CancellationError { return .cancelled }
+        if let apiError = error as? APIError { return apiError }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+            return .cancelled
+        }
+        return .network("无法连接主控：\(error.localizedDescription)")
     }
 }
 
@@ -82,7 +101,7 @@ final class APIClient {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw APIError.network("无法连接主控：\(error.localizedDescription)")
+            throw APIError.from(error)
         }
 
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0

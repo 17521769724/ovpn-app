@@ -42,6 +42,13 @@ struct AuthResult: Decodable {
     let user: AppUser
 }
 
+/// 注册验证码（与 Web 端一致：主控返回明文码 + 签名 token）
+struct CaptchaPayload: Decodable {
+    let enabled: Bool
+    let code: String
+    let token: String
+}
+
 // MARK: - 服务器与线路
 
 struct ServerNode: Decodable, Identifiable {
@@ -59,10 +66,14 @@ struct ServerNode: Decodable, Identifiable {
     let levelRequired: Int
     let levelOk: Bool
     let dcoEnabled: Bool
-    let rxRate: Int64
-    let txRate: Int64
+    /// 实时速率（老版本主控可能不下发，缺失时按 0 处理，避免整表解析失败）
+    let rxRate: Int64?
+    let txRate: Int64?
     let usable: Bool
     let unusableReason: String
+
+    var rxRateValue: Int64 { rxRate ?? 0 }
+    var txRateValue: Int64 { txRate ?? 0 }
 
     var statusText: String {
         switch status {
@@ -189,7 +200,7 @@ struct PlansPayload: Decodable {
 struct OrderItem: Decodable, Identifiable {
     let id: Int
     let orderNo: String
-    let planId: Int
+    let planId: Int?
     let planName: String?
     let amountCents: Int
     let status: String
@@ -198,6 +209,10 @@ struct OrderItem: Decodable, Identifiable {
     let paidAt: String?
     let createdAt: String
     let expiresAt: String?
+    /// 主控新版本下发：该订单当前是否还能继续支付
+    let canPay: Bool?
+    /// 主控新版本下发：继续支付链接（复用原订单）
+    let payUrl: String?
 
     var statusText: String {
         switch status {
@@ -208,6 +223,19 @@ struct OrderItem: Decodable, Identifiable {
         case "refunded": return "已退款"
         default: return status
         }
+    }
+
+    /// 兼容老版本主控（无 can_pay 字段）：待支付即视为可支付
+    var payable: Bool {
+        if let canPay { return canPay }
+        return status == "pending" && remainingSeconds > 0
+    }
+
+    /// 剩余支付秒数（无有效期或已过期返回 0）
+    var remainingSeconds: Int {
+        guard status == "pending", let expiresAt, !expiresAt.isEmpty else { return 0 }
+        guard let date = Format.parse(expiresAt) else { return 0 }
+        return max(0, Int(date.timeIntervalSinceNow.rounded()))
     }
 }
 
@@ -373,32 +401,32 @@ enum Format {
 
     /// ISO8601 → 简短本地时间
     static func dateTime(_ iso: String?) -> String {
-        guard let iso, !iso.isEmpty else { return "-" }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var date = formatter.date(from: iso)
-        if date == nil {
-            formatter.formatOptions = [.withInternetDateTime]
-            date = formatter.date(from: iso)
-        }
-        guard let date else { return iso }
+        guard let date = parse(iso) else { return iso?.isEmpty == false ? (iso ?? "-") : "-" }
         let out = DateFormatter()
         out.dateFormat = "yyyy-MM-dd HH:mm"
         return out.string(from: date)
     }
 
     static func dateOnly(_ iso: String?) -> String {
-        guard let iso, !iso.isEmpty else { return "-" }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var date = formatter.date(from: iso)
-        if date == nil {
-            formatter.formatOptions = [.withInternetDateTime]
-            date = formatter.date(from: iso)
-        }
-        guard let date else { return iso }
+        guard let date = parse(iso) else { return iso?.isEmpty == false ? (iso ?? "-") : "-" }
         let out = DateFormatter()
         out.dateFormat = "yyyy-MM-dd"
         return out.string(from: date)
+    }
+
+    /// ISO8601 字符串 → Date（兼容带/不带毫秒）
+    static func parse(_ iso: String?) -> Date? {
+        guard let iso, !iso.isEmpty else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: iso) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: iso)
+    }
+
+    /// 秒数 → mm:ss（用于订单支付倒计时）
+    static func countdown(_ seconds: Int) -> String {
+        let value = max(0, seconds)
+        return String(format: "%02d:%02d", value / 60, value % 60)
     }
 }

@@ -343,12 +343,15 @@ struct LoadingBlock: View {
     }
 }
 
-/// 顶部提示条（错误/警告/成功）
+/// 提示类型（内联提示条与全局横幅共用）
+enum BannerKind {
+    case success, error, warning, info
+}
+
+/// 顶部提示条（错误/警告/成功，用于页面内常驻状态）
 struct BannerBar: View {
     let message: String
-    var kind: Kind = .error
-
-    enum Kind { case error, warning, success }
+    var kind: BannerKind = .error
 
     @Environment(\.colorScheme) private var scheme
 
@@ -359,6 +362,7 @@ struct BannerBar: View {
             case .error: return (palette.offlineBg, palette.offlineText, "exclamationmark.circle")
             case .warning: return (palette.warningBg, palette.warningText, "info.circle")
             case .success: return (palette.onlineBg, palette.onlineText, "checkmark.circle")
+            case .info: return (palette.muted, palette.secondaryText, "info.circle")
             }
         }()
         HStack(alignment: .top, spacing: 6) {
@@ -374,11 +378,126 @@ struct BannerBar: View {
     }
 }
 
+// MARK: - 全局横幅提示（与 Web 端 sonner 一致：顶部居中、彩色、圆角、带图标）
+
+struct ToastMessage: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+    let kind: BannerKind
+}
+
+struct ToastCard: View {
+    let message: ToastMessage
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let palette = Palette(scheme: scheme)
+        let style = palette.toastStyle(message.kind)
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: style.icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(style.foreground)
+            Text(message.text)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(style.foreground)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(style.background)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                .stroke(style.border, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .shadow(color: Color.black.opacity(0.10), radius: 8, y: 4)
+    }
+}
+
+/// 顶部横幅宿主：负责展示与自动消失
+struct ToastHost: View {
+    @EnvironmentObject private var app: AppState
+
+    var body: some View {
+        VStack {
+            if let toast = app.toast {
+                ToastCard(message: toast)
+                    .padding(.horizontal, DS.Size.pagePadding)
+                    .padding(.top, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .onTapGesture { app.dismissToast() }
+            }
+            Spacer()
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: app.toast)
+        .allowsHitTesting(app.toast != nil)
+    }
+}
+
+// MARK: - 彩色图标块（多色美化）
+
+struct IconTile: View {
+    let icon: String
+    var color: Color = DS.IconColor.blue
+    var size: CGFloat = 30
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.3)
+            .fill(color.opacity(0.14))
+            .frame(width: size, height: size)
+            .overlay(
+                Image(systemName: icon)
+                    .font(.system(size: size * 0.48, weight: .semibold))
+                    .foregroundStyle(color)
+            )
+    }
+}
+
+/// 个人中心等列表行（整行可点击）
+struct MenuRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    var subtitle: String?
+    var badge: String?
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let palette = Palette(scheme: scheme)
+        HStack(spacing: 12) {
+            IconTile(icon: icon, color: iconColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(DS.Font.body)
+                    .foregroundStyle(palette.foreground)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(DS.Font.caption)
+                        .foregroundStyle(palette.mutedForeground)
+                }
+            }
+            Spacer(minLength: 8)
+            if let badge, !badge.isEmpty {
+                StatusBadge(text: badge, background: iconColor.opacity(0.14), foreground: iconColor)
+            }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(palette.mutedForeground.opacity(0.8))
+        }
+        .padding(.horizontal, DS.Size.cardPadding)
+        .frame(minHeight: 54)
+        .contentShape(Rectangle())
+    }
+}
+
 /// 底部浮层提示
 struct ToastView: View {
     let message: String
-
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Text(message)

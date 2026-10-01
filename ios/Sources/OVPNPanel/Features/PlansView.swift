@@ -7,10 +7,8 @@ struct PlansView: View {
 
     @State private var payload: PlansPayload?
     @State private var loading = true
-    @State private var error = ""
     @State private var paying = false
     @State private var payURL: String?
-    @State private var payMessage = ""
 
     var body: some View {
         let palette = Palette(scheme: scheme)
@@ -24,6 +22,7 @@ struct PlansView: View {
                             .foregroundStyle(palette.mutedForeground)
                     }
                     Spacer()
+                    IconTile(icon: "shippingbox.fill", color: DS.IconColor.violet, size: 34)
                     Button {
                         Task { await load() }
                     } label: {
@@ -38,7 +37,6 @@ struct PlansView: View {
                     .buttonStyle(.plain)
                 }
 
-                if !error.isEmpty { BannerBar(message: error) }
                 if let payload, !payload.purchaseEnabled {
                     BannerBar(message: "站点当前已关闭购买功能", kind: .warning)
                 }
@@ -56,18 +54,18 @@ struct PlansView: View {
                 NavigationLink {
                     OrdersView().environmentObject(app)
                 } label: {
-                    HStack {
-                        Image(systemName: "doc.text")
-                        Text("我的订单")
+                    HStack(spacing: 12) {
+                        IconTile(icon: "doc.text.fill", color: DS.IconColor.sky)
+                        Text("我的订单").font(DS.Font.body).foregroundStyle(palette.foreground)
                         Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 12))
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(palette.mutedForeground)
                     }
-                    .font(DS.Font.body)
-                    .foregroundStyle(palette.foreground)
                     .padding(DS.Size.cardPadding)
                     .background(palette.card)
                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(palette.border, lineWidth: 1))
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -85,35 +83,31 @@ struct PlansView: View {
                 SafariSheet(url: url) { self.payURL = nil }
             }
         }
-        .alert("提示", isPresented: Binding(
-            get: { !payMessage.isEmpty },
-            set: { if !$0 { payMessage = "" } }
-        )) {
-            Button("知道了", role: .cancel) { payMessage = "" }
-        } message: {
-            Text(payMessage)
-        }
     }
 
     private func planCard(_ palette: Palette, plan: PlanItem) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(plan.name).font(DS.Font.section).foregroundStyle(palette.foreground)
-                            if plan.isCurrent {
-                                StatusBadge(text: "当前套餐", background: palette.onlineBg, foreground: palette.onlineText)
+                    HStack(spacing: 10) {
+                        IconTile(icon: plan.isCurrent ? "checkmark.seal.fill" : "gift.fill",
+                                 color: plan.isCurrent ? DS.IconColor.emerald : DS.IconColor.violet)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(plan.name).font(DS.Font.section).foregroundStyle(palette.foreground)
+                                if plan.isCurrent {
+                                    StatusBadge(text: "当前套餐", background: palette.onlineBg, foreground: palette.onlineText)
+                                }
                             }
-                        }
-                        if let description = plan.description, !description.isEmpty {
-                            Text(description).font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
+                            if let description = plan.description, !description.isEmpty {
+                                Text(description).font(DS.Font.caption).foregroundStyle(palette.secondaryText)
+                            }
                         }
                     }
                     Spacer()
                     Text(Format.money(plan.priceCents, symbol: payload?.currencySymbol ?? "¥"))
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(palette.foreground)
+                        .foregroundStyle(DS.IconColor.orange)
                 }
 
                 VStack(spacing: 6) {
@@ -125,7 +119,7 @@ struct PlansView: View {
 
                 AppButton(
                     title: "立即购买",
-                    icon: "cart",
+                    icon: "cart.fill",
                     style: .primary,
                     loading: paying,
                     disabled: !(payload?.purchaseEnabled ?? false)
@@ -137,73 +131,58 @@ struct PlansView: View {
     }
 
     private func load() async {
-        error = ""
         loading = true
         defer { loading = false }
         do {
             payload = try await APIClient.shared.fetchPlans()
         } catch {
-            self.error = error.localizedDescription
+            if APIError.from(error).isCancelled { return }
+            app.report(error)
         }
     }
 
     private func buy(plan: PlanItem) async {
-        error = ""
         paying = true
         defer { paying = false }
         do {
             let result = try await APIClient.shared.createOrder(planId: plan.id, method: "alipay")
             if result.payUrl.isEmpty {
-                payMessage = result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message
+                app.showToast(result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message, kind: .warning)
             } else {
                 payURL = result.payUrl
+                app.showToast("订单已创建，请在 10 分钟内完成支付", kind: .info)
             }
         } catch {
-            self.error = error.localizedDescription
+            app.report(error)
         }
     }
 }
 
-/// 我的订单
+/// 我的订单（10 分钟支付窗口 + 继续支付 + 取消）
 struct OrdersView: View {
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
 
     @State private var payload: OrdersPayload?
     @State private var loading = true
-    @State private var error = ""
+    @State private var payURL: String?
+    @State private var busyId: Int?
+    @State private var now = Date()
+    @State private var refreshedExpired = false
+
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         let palette = Palette(scheme: scheme)
         ScrollView {
             VStack(spacing: DS.Size.gap) {
-                if !error.isEmpty { BannerBar(message: error) }
                 if loading && payload == nil {
                     LoadingBlock(text: "正在获取订单…")
                 } else if (payload?.orders ?? []).isEmpty {
                     EmptyHint(icon: "doc.text", title: "暂无订单")
                 } else {
                     ForEach(payload?.orders ?? []) { order in
-                        AppCard {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text(order.planName ?? "套餐").font(DS.Font.section)
-                                        .foregroundStyle(palette.foreground)
-                                    Spacer()
-                                    StatusBadge(
-                                        text: order.statusText,
-                                        background: order.status == "paid" ? palette.onlineBg : palette.muted,
-                                        foreground: order.status == "paid" ? palette.onlineText : palette.mutedForeground
-                                    )
-                                }
-                                InfoRow(label: "订单号", value: order.orderNo)
-                                InfoRow(label: "金额", value: Format.money(order.amountCents))
-                                InfoRow(label: "创建时间", value: Format.dateTime(order.createdAt))
-                                if let paidAt = order.paidAt {
-                                    InfoRow(label: "支付时间", value: Format.dateTime(paidAt))
-                                }
-                            }
-                        }
+                        orderCard(palette, order: order)
                     }
                 }
             }
@@ -214,16 +193,186 @@ struct OrdersView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+        .onReceive(ticker) { value in
+            now = value
+            // 有 pending 订单倒计时结束：自动刷新一次列表状态
+            if !refreshedExpired,
+               (payload?.orders ?? []).contains(where: { $0.status == "pending" && $0.remainingSeconds <= 1 }) {
+                refreshedExpired = true
+                Task { await load() }
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { payURL != nil },
+            set: { if !$0 { payURL = nil } }
+        )) {
+            if let payURL, let url = URL(string: payURL) {
+                SafariSheet(url: url) { self.payURL = nil }
+            }
+        }
+    }
+
+    private func orderCard(_ palette: Palette, order: OrderItem) -> some View {
+        let remaining = remainingSeconds(order)
+        return AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    IconTile(icon: orderIcon(order), color: orderColor(order))
+                    Text(order.planName ?? "套餐").font(DS.Font.section)
+                        .foregroundStyle(palette.foreground)
+                    Spacer()
+                    StatusBadge(
+                        text: order.statusText,
+                        background: statusBackground(palette, order: order),
+                        foreground: statusForeground(palette, order: order)
+                    )
+                }
+                InfoRow(label: "订单号", value: order.orderNo)
+                InfoRow(label: "金额", value: Format.money(order.amountCents))
+                InfoRow(label: "创建时间", value: Format.dateTime(order.createdAt))
+                if let paidAt = order.paidAt {
+                    InfoRow(label: "支付时间", value: Format.dateTime(paidAt))
+                }
+                if order.status == "pending" {
+                    HStack {
+                        Text("剩余支付时间").font(DS.Font.bodySmall).foregroundStyle(palette.mutedForeground)
+                        Spacer()
+                        if remaining > 0 {
+                            Text(Format.countdown(remaining))
+                                .font(DS.Font.number)
+                                .foregroundStyle(DS.IconColor.amber)
+                        } else {
+                            Text("已过期")
+                                .font(DS.Font.number)
+                                .foregroundStyle(palette.offlineText)
+                        }
+                    }
+                }
+
+                if order.status == "pending" {
+                    HStack(spacing: 10) {
+                        if remaining > 0 {
+                            Button {
+                                Task { await pay(order) }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if busyId == order.id {
+                                        ProgressView().scaleEffect(0.7)
+                                    } else {
+                                        Image(systemName: "creditcard.fill").font(.system(size: 13))
+                                    }
+                                    Text("继续支付").font(DS.Font.bodySmall)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 38)
+                                .foregroundStyle(.white)
+                                .background(DS.IconColor.emerald)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(busyId != nil)
+                        }
+                        Button {
+                            Task { await cancel(order) }
+                        } label: {
+                            Text("取消订单")
+                                .font(DS.Font.bodySmall)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 38)
+                                .foregroundStyle(palette.foreground)
+                                .background(palette.card)
+                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg).stroke(palette.border, lineWidth: 1))
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(busyId != nil)
+                    }
+                }
+            }
+        }
+    }
+
+    private func orderIcon(_ order: OrderItem) -> String {
+        switch order.status {
+        case "paid": return "checkmark.seal.fill"
+        case "pending": return "clock.fill"
+        case "cancelled": return "xmark.circle.fill"
+        case "expired": return "hourglass"
+        case "refunded": return "arrow.uturn.backward.circle.fill"
+        default: return "doc.text.fill"
+        }
+    }
+
+    private func orderColor(_ order: OrderItem) -> Color {
+        switch order.status {
+        case "paid": return DS.IconColor.emerald
+        case "pending": return DS.IconColor.amber
+        case "cancelled", "expired": return DS.IconColor.slate
+        default: return DS.IconColor.sky
+        }
+    }
+
+    private func statusBackground(_ palette: Palette, order: OrderItem) -> Color {
+        switch order.status {
+        case "paid": return palette.onlineBg
+        case "pending": return palette.warningBg
+        default: return palette.muted
+        }
+    }
+
+    private func statusForeground(_ palette: Palette, order: OrderItem) -> Color {
+        switch order.status {
+        case "paid": return palette.onlineText
+        case "pending": return palette.warningText
+        default: return palette.mutedForeground
+        }
+    }
+
+    /// 按当前时间实时计算剩余秒数（每秒刷新）
+    private func remainingSeconds(_ order: OrderItem) -> Int {
+        guard order.status == "pending", let expiresAt = order.expiresAt,
+              let date = Format.parse(expiresAt) else { return 0 }
+        return max(0, Int(date.timeIntervalSince(now).rounded()))
     }
 
     private func load() async {
-        error = ""
         loading = true
         defer { loading = false }
         do {
             payload = try await APIClient.shared.fetchOrders()
+            refreshedExpired = false
         } catch {
-            self.error = error.localizedDescription
+            if APIError.from(error).isCancelled { return }
+            app.report(error)
+        }
+    }
+
+    /// 继续支付（复用原订单，10 分钟内有效）
+    private func pay(_ order: OrderItem) async {
+        busyId = order.id
+        defer { busyId = nil }
+        do {
+            let result = try await APIClient.shared.payOrder(id: order.id)
+            if result.payUrl.isEmpty {
+                app.showToast(result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message, kind: .warning)
+            } else {
+                payURL = result.payUrl
+            }
+        } catch {
+            app.report(error)
+            await load()
+        }
+    }
+
+    private func cancel(_ order: OrderItem) async {
+        busyId = order.id
+        defer { busyId = nil }
+        do {
+            try await APIClient.shared.cancelOrder(id: order.id)
+            app.showToast("订单已取消", kind: .success)
+            await load()
+        } catch {
+            app.report(error)
         }
     }
 }

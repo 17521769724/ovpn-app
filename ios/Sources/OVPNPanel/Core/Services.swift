@@ -18,12 +18,14 @@ enum LocalStore {
     }
 }
 
-/// 令牌安全存储（Keychain）
+/// 令牌与凭据安全存储（Keychain）
 enum Keychain {
     private static let service = "com.ovpn.panel"
-    private static let account = "app.token"
+    static let tokenAccount = "app.token"
+    /// 连接 VPN 用的账号密码（登录成功后保存，连接时自动使用）
+    static let passwordAccount = "vpn.password"
 
-    static func save(_ value: String) {
+    static func save(_ value: String, account: String = tokenAccount) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -36,7 +38,7 @@ enum Keychain {
         SecItemAdd(attributes as CFDictionary, nil)
     }
 
-    static func load() -> String? {
+    static func load(account: String = tokenAccount) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -51,7 +53,7 @@ enum Keychain {
         return token
     }
 
-    static func clear() {
+    static func clear(account: String = tokenAccount) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -71,10 +73,17 @@ extension APIClient {
                           body: ["username": username, "password": password], as: AuthResult.self)
     }
 
-    func register(username: String, password: String, email: String) async throws -> AuthResult {
-        try await request("/api/v1/auth/register", method: "POST",
-                          body: ["username": username, "password": password, "email": email],
-                          as: AuthResult.self)
+    func register(username: String, password: String, email: String,
+                  captchaToken: String, captchaInput: String) async throws -> AuthResult {
+        var body: [String: Any] = ["username": username, "password": password, "email": email]
+        if !captchaToken.isEmpty { body["captchaToken"] = captchaToken }
+        if !captchaInput.isEmpty { body["captchaInput"] = captchaInput }
+        return try await request("/api/v1/auth/register", method: "POST", body: body, as: AuthResult.self)
+    }
+
+    /// 注册验证码（GET /api/auth/captcha，与 Web 端同一接口）
+    func fetchCaptcha() async throws -> CaptchaPayload {
+        try await request("/api/auth/captcha", as: CaptchaPayload.self)
     }
 
     func forgotQuestion(account: String) async throws -> String {
@@ -134,6 +143,16 @@ extension APIClient {
     func createOrder(planId: Int, method: String) async throws -> CreateOrderPayload {
         try await request("/api/v1/orders", method: "POST",
                           body: ["plan_id": planId, "method": method], as: CreateOrderPayload.self)
+    }
+
+    /// 继续支付（复用原订单，不再新建订单）
+    func payOrder(id: Int) async throws -> CreateOrderPayload {
+        try await request("/api/v1/orders/\(id)/pay", method: "POST", as: CreateOrderPayload.self)
+    }
+
+    /// 取消未支付订单
+    func cancelOrder(id: Int) async throws {
+        try await requestVoid("/api/v1/orders/\(id)/cancel", method: "POST")
     }
 
     // 公告

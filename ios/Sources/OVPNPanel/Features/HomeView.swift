@@ -1,21 +1,25 @@
 import SwiftUI
 
-/// 主页：选择服务器 → 选择线路 → 连接
+/// 主页：选择服务器 → 选择线路 → 连接（NetworkExtension 隧道）
 struct HomeView: View {
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var vpn = VPNManager.shared
 
     @State private var payload: LinesPayload?
     @State private var loading = true
-    @State private var error = ""
     @State private var selectedNodeId: Int?
     @State private var selectedLineId: Int?
     @State private var category = "全部"
-    @State private var preparing = false
-    @State private var profile: LineConfig?
-    @State private var showProfile = false
+    @State private var connecting = false
     @State private var showServerPicker = false
-    @State private var lastRefresh = Date()
+    @State private var connectedProfile: LineConfig?
+
+    // 输入一次密码后保存到钥匙串，后续连接自动使用
+    @State private var passwordInput = ""
+    @State private var pendingProfile: LineConfig?
+    @State private var showPasswordSheet = false
+    @State private var savingPassword = false
 
     private var selectedNode: ServerNode? {
         payload?.nodes.first { $0.id == selectedNodeId }
@@ -50,6 +54,10 @@ struct HomeView: View {
                 VStack(spacing: DS.Size.gapLarge) {
                     header(palette)
 
+                    if vpn.status != .disconnected || connectedProfile != nil {
+                        connectionCard(palette)
+                    }
+
                     if let payload {
                         if !payload.quota.valid {
                             BannerBar(message: payload.quota.reason.isEmpty ? "订阅状态异常，暂时无法连接" : payload.quota.reason)
@@ -60,8 +68,6 @@ struct HomeView: View {
                             )
                         }
                     }
-
-                    if !error.isEmpty { BannerBar(message: error) }
 
                     if loading && payload == nil {
                         LoadingBlock(text: "正在获取服务器与线路…")
@@ -83,12 +89,13 @@ struct HomeView: View {
             }
         }
         .pageBackground()
-        .task { await load() }
+        .task {
+            await vpn.prepare()
+            await load()
+        }
         .refreshable { await load() }
-        .sheet(isPresented: $showProfile) {
-            if let profile {
-                ProfilePreviewSheet(profile: profile) { showProfile = false }
-            }
+        .sheet(isPresented: $showPasswordSheet) {
+            passwordSheet(palette)
         }
     }
 
@@ -104,7 +111,8 @@ struct HomeView: View {
             }
             Spacer()
             if let level = payload?.level {
-                StatusBadge(text: "Lv.\(level)", background: palette.muted, foreground: palette.foreground)
+                StatusBadge(text: "Lv.\(level)", background: DS.IconColor.violet.opacity(0.14),
+                            foreground: DS.IconColor.violet)
             }
             Button {
                 Task { await load() }
@@ -119,6 +127,54 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .disabled(loading)
+        }
+    }
+
+    // MARK: - 连接状态
+
+    private func connectionCard(_ palette: Palette) -> some View {
+        let style: (Color, String) = {
+            switch vpn.status {
+            case .connected: return (palette.onlineText, "checkmark.seal.fill")
+            case .connecting, .reasserting: return (DS.IconColor.amber, "arrow.triangle.2.circlepath")
+            case .disconnecting: return (DS.IconColor.amber, "arrow.triangle.2.circlepath")
+            default: return (palette.mutedForeground, "bolt.horizontal.circle")
+            }
+        }()
+        return AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    IconTile(icon: style.1, color: style.0, size: 34)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(vpn.statusText)
+                            .font(DS.Font.section)
+                            .foregroundStyle(style.0)
+                        if let profile = connectedProfile {
+                            Text("\(profile.nodeName) · \(profile.lineName)")
+                                .font(DS.Font.caption)
+                                .foregroundStyle(palette.secondaryText)
+                        } else {
+                            Text("选择服务器与线路后点击连接")
+                                .font(DS.Font.caption)
+                                .foregroundStyle(palette.mutedForeground)
+                        }
+                    }
+                    Spacer()
+                    Circle()
+                        .fill(style.0)
+                        .frame(width: 9, height: 9)
+                        .opacity(vpn.status == .connected ? 1 : 0.5)
+                }
+
+                if vpn.status == .disconnected, connectedProfile != nil {
+                    AppButton(title: "断开连接", icon: "stop.circle", style: .outline, height: 40) {
+                        Task {
+                            await vpn.disconnect()
+                            app.showToast("已断开连接", kind: .info)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -159,16 +215,20 @@ struct HomeView: View {
         return AppCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(node.name).font(DS.Font.section).foregroundStyle(palette.foreground)
-                            if node.dcoEnabled {
-                                StatusBadge(text: "DCO", background: palette.onlineBg, foreground: palette.onlineText)
+                    HStack(spacing: 10) {
+                        IconTile(icon: node.status == "online" ? "server.rack" : "exclamationmark.icloud",
+                                 color: node.status == "online" ? DS.IconColor.sky : DS.IconColor.slate)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(node.name).font(DS.Font.section).foregroundStyle(palette.foreground)
+                                if node.dcoEnabled {
+                                    StatusBadge(text: "DCO", background: palette.onlineBg, foreground: palette.onlineText)
+                                }
                             }
+                            Text(node.region?.isEmpty == false ? (node.region ?? "") : node.address)
+                                .font(DS.Font.caption)
+                                .foregroundStyle(palette.mutedForeground)
                         }
-                        Text(node.region?.isEmpty == false ? (node.region ?? "") : node.address)
-                            .font(DS.Font.caption)
-                            .foregroundStyle(palette.mutedForeground)
                     }
                     Spacer()
                     NodeStatusBadge(status: node.status)
@@ -187,7 +247,7 @@ struct HomeView: View {
                 }
 
                 HStack {
-                    Text("实时 ↑ \(Format.bytes(node.rxRate))/s · ↓ \(Format.bytes(node.txRate))/s")
+                    Text("实时 ↑ \(Format.bytes(node.rxRateValue))/s · ↓ \(Format.bytes(node.txRateValue))/s")
                         .font(DS.Font.caption)
                         .foregroundStyle(palette.mutedForeground)
                     Spacer()
@@ -203,7 +263,7 @@ struct HomeView: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .stroke(isSelected ? palette.primary : Color.clear, lineWidth: 1.5)
+                .stroke(isSelected ? DS.IconColor.sky : Color.clear, lineWidth: 1.5)
         )
         .opacity(node.usable ? 1 : 0.6)
     }
@@ -222,11 +282,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: DS.Size.gap) {
             if let node = selectedNode {
                 HStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .fill(palette.muted)
-                        .frame(width: 38, height: 38)
-                        .overlay(Image(systemName: "server.rack").font(.system(size: 16))
-                            .foregroundStyle(palette.foreground))
+                    IconTile(icon: "server.rack", color: DS.IconColor.sky, size: 38)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(node.name).font(DS.Font.section).foregroundStyle(palette.foreground)
                         Text(node.address).font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
@@ -273,19 +329,22 @@ struct HomeView: View {
 
     private func lineCard(_ palette: Palette, line: VPNLine) -> some View {
         let isSelected = line.id == selectedLineId
+        let isUDP = line.protocol.lowercased() == "udp"
         return AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                HStack(spacing: 10) {
+                    IconTile(icon: isUDP ? "bolt.fill" : "shield.lefthalf.filled",
+                             color: isUDP ? DS.IconColor.amber : DS.IconColor.indigo)
                     Text(line.name).font(DS.Font.section).foregroundStyle(palette.foreground)
                     Spacer()
                     StatusBadge(
                         text: line.protocolUpper,
-                        background: line.protocol == "udp" ? palette.muted : palette.background,
-                        foreground: palette.foreground
+                        background: (isUDP ? DS.IconColor.amber : DS.IconColor.indigo).opacity(0.14),
+                        foreground: isUDP ? DS.IconColor.amber : DS.IconColor.indigo
                     )
                 }
                 if let remark = line.remark, !remark.isEmpty {
-                    Text(remark).font(DS.Font.caption).foregroundStyle(palette.mutedForeground).lineLimit(2)
+                    Text(remark).font(DS.Font.caption).foregroundStyle(palette.secondaryText).lineLimit(2)
                 }
                 HStack {
                     Text("协议 / 端口").font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
@@ -305,26 +364,37 @@ struct HomeView: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl)
-                .stroke(isSelected ? palette.primary : Color.clear, lineWidth: 1.5)
+                .stroke(isSelected ? DS.IconColor.sky : Color.clear, lineWidth: 1.5)
         )
     }
 
     // MARK: - 底部连接栏
 
     private func bottomBar(_ palette: Palette, node: ServerNode, line: VPNLine) -> some View {
-        VStack(spacing: 8) {
+        let connected = vpn.status == .connected || vpn.status == .connecting || vpn.status == .reasserting
+        return VStack(spacing: 8) {
             HStack {
                 Text("\(node.name) · \(line.name)")
                     .font(DS.Font.bodySmall)
-                    .foregroundStyle(palette.mutedForeground)
+                    .foregroundStyle(palette.secondaryText)
                     .lineLimit(1)
                 Spacer()
                 Text("\(line.protocolUpper) \(line.port)")
                     .font(DS.Font.caption)
                     .foregroundStyle(palette.mutedForeground)
             }
-            AppButton(title: preparing ? "正在准备线路…" : "连接", icon: "bolt.fill", loading: preparing) {
-                Task { await prepareConnection() }
+            if connected {
+                AppButton(title: vpn.statusText, icon: "stop.circle", style: .outline,
+                          loading: vpn.isBusy, disabled: vpn.status == .disconnecting) {
+                    Task {
+                        await vpn.disconnect()
+                        app.showToast("已断开连接", kind: .info)
+                    }
+                }
+            } else {
+                AppButton(title: connecting ? "正在准备线路…" : "连接", icon: "bolt.fill", loading: connecting) {
+                    Task { await connect() }
+                }
             }
         }
         .padding(.horizontal, DS.Size.pagePadding)
@@ -334,16 +404,63 @@ struct HomeView: View {
         .overlay(Rectangle().fill(palette.border).frame(height: 1), alignment: .top)
     }
 
+    // MARK: - 密码输入（首次连接时保存登录密码）
+
+    private func passwordSheet(_ palette: Palette) -> some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                BannerBar(message: "连接需要账号密码认证，密码仅保存在本机钥匙串，不会上传。", kind: .info)
+                AppTextField(title: "账号", placeholder: "", text: .constant(app.user?.username ?? ""))
+                AppTextField(title: "登录密码", placeholder: "请输入登录密码", text: $passwordInput, secure: true)
+                AppButton(title: "保存并连接", icon: "bolt.fill", loading: savingPassword) {
+                    Task { await confirmPasswordAndConnect() }
+                }
+            }
+            .padding(DS.Size.pagePadding)
+            .pageBackground()
+            .navigationTitle("输入连接密码")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        showPasswordSheet = false
+                        pendingProfile = nil
+                        passwordInput = ""
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(320)])
+    }
+
+    private func confirmPasswordAndConnect() async {
+        guard let profile = pendingProfile else { return }
+        guard !passwordInput.isEmpty else {
+            app.showToast("请输入登录密码", kind: .warning)
+            return
+        }
+        savingPassword = true
+        defer { savingPassword = false }
+        Keychain.save(passwordInput, account: Keychain.passwordAccount)
+        let password = passwordInput
+        passwordInput = ""
+        showPasswordSheet = false
+        pendingProfile = nil
+        do {
+            try await startTunnel(profile: profile, password: password)
+        } catch {
+            app.report(error)
+        }
+    }
+
     // MARK: - 数据与动作
 
     private func load() async {
-        error = ""
         loading = true
         defer { loading = false }
         do {
             let payload = try await APIClient.shared.fetchLines()
             self.payload = payload
-            self.lastRefresh = Date()
             if let selected = selectedNodeId, !payload.nodes.contains(where: { $0.id == selected }) {
                 selectedNodeId = nil
                 selectedLineId = nil
@@ -352,75 +469,42 @@ struct HomeView: View {
                 selectedLineId = nil
             }
         } catch {
-            self.error = error.localizedDescription
+            // 下拉刷新取消请求时静默处理，避免弹出「已取消」错误
+            if APIError.from(error).isCancelled { return }
+            app.report(error)
         }
     }
 
-    /// 拉取所选服务器的线路配置（.ovpn），为连接做准备
-    private func prepareConnection() async {
+    private func connect() async {
         guard let node = selectedNode, let line = selectedLine else { return }
         guard payload?.quota.valid == true else {
-            error = payload?.quota.reason ?? "当前订阅状态不可用"
+            app.showToast(payload?.quota.reason ?? "当前订阅状态不可用", kind: .warning)
             return
         }
-        preparing = true
-        defer { preparing = false }
+        connecting = true
+        defer { connecting = false }
         do {
             let config = try await APIClient.shared.fetchLineConfig(lineId: line.id, nodeId: node.id)
-            profile = config
-            showProfile = true
+            let saved = Keychain.load(account: Keychain.passwordAccount) ?? ""
+            if saved.isEmpty {
+                pendingProfile = config
+                passwordInput = ""
+                showPasswordSheet = true
+                return
+            }
+            try await startTunnel(profile: config, password: saved)
         } catch {
-            self.error = error.localizedDescription
+            if APIError.from(error).isCancelled { return }
+            app.report(error)
         }
     }
-}
 
-// MARK: - 线路配置预览
-
-struct ProfilePreviewSheet: View {
-    let profile: LineConfig
-    let onClose: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let palette = Palette(scheme: scheme)
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DS.Size.gapLarge) {
-                    BannerBar(
-                        message: "线路配置已从主控获取成功。隧道连接（自动建立 VPN）将在下一个测试包中启用。",
-                        kind: .warning
-                    )
-                    AppCard {
-                        VStack(alignment: .leading, spacing: 10) {
-                            SectionHeader(title: "连接信息")
-                            InfoRow(label: "线路", value: profile.lineName)
-                            InfoRow(label: "服务器", value: profile.nodeName)
-                            InfoRow(label: "配置文件", value: profile.filename)
-                            InfoRow(label: "大小", value: Format.bytes(Int64(profile.content.utf8.count)))
-                        }
-                    }
-                    AppCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            SectionHeader(title: "配置预览", subtitle: "内容由主控生成（含证书与密钥）")
-                            Text(profile.content.prefix(1200))
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(palette.mutedForeground)
-                                .lineLimit(30)
-                        }
-                    }
-                }
-                .padding(DS.Size.pagePadding)
-            }
-            .pageBackground()
-            .navigationTitle("准备连接")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { onClose() }
-                }
-            }
+    private func startTunnel(profile: LineConfig, password: String) async throws {
+        guard let username = app.user?.username, !username.isEmpty else {
+            throw APIError.server("登录状态异常，请重新登录")
         }
+        try await vpn.connect(profile: profile, username: username, password: password)
+        connectedProfile = profile
+        app.showToast("正在连接 \(profile.nodeName)…", kind: .info)
     }
 }

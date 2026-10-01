@@ -9,14 +9,12 @@ struct AnnouncementsView: View {
 
     @State private var payload: AnnouncementsPayload?
     @State private var loading = true
-    @State private var error = ""
     @State private var expanded: Set<Int> = []
 
     var body: some View {
         let palette = Palette(scheme: scheme)
         ScrollView {
             VStack(spacing: DS.Size.gap) {
-                if !error.isEmpty { BannerBar(message: error) }
                 if loading && payload == nil {
                     LoadingBlock(text: "正在获取公告…")
                 } else if (payload?.announcements ?? []).isEmpty {
@@ -72,13 +70,13 @@ struct AnnouncementsView: View {
     }
 
     private func load() async {
-        error = ""
         loading = true
         defer { loading = false }
         do {
             payload = try await APIClient.shared.fetchAnnouncements()
         } catch {
-            self.error = error.localizedDescription
+            if APIError.from(error).isCancelled { return }
+            app.report(error)
         }
     }
 
@@ -99,9 +97,7 @@ struct ActivationView: View {
     @State private var records: [ActivationRecord] = []
     @State private var loading = true
     @State private var submitting = false
-    @State private var error = ""
     @State private var result: ActivationRedeemResult?
-    @State private var notice = ""
 
     var body: some View {
         let palette = Palette(scheme: scheme)
@@ -109,11 +105,12 @@ struct ActivationView: View {
             VStack(spacing: DS.Size.gapLarge) {
                 AppCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionHeader(title: "兑换激活码", subtitle: "输入管理员发放的激活码")
+                        HStack(spacing: 10) {
+                            IconTile(icon: "ticket.fill", color: DS.IconColor.amber)
+                            SectionHeader(title: "兑换激活码", subtitle: "输入管理员发放的激活码")
+                        }
                         AppTextField(title: "激活码", placeholder: "OVPN-XXXX-XXXX-XXXX", text: $code)
-                        if !error.isEmpty { BannerBar(message: error) }
-                        if !notice.isEmpty { BannerBar(message: notice, kind: .success) }
-                        AppButton(title: "立即兑换", icon: "ticket", loading: submitting) {
+                        AppButton(title: "立即兑换", icon: "ticket.fill", loading: submitting) {
                             Task { await redeem() }
                         }
                     }
@@ -173,27 +170,28 @@ struct ActivationView: View {
     }
 
     private func redeem() async {
-        error = ""
-        notice = ""
-        result = nil
         let value = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { error = "请输入激活码"; return }
+        guard !value.isEmpty else {
+            app.showToast("请输入激活码", kind: .warning)
+            return
+        }
         submitting = true
         defer { submitting = false }
+        result = nil
         do {
             let preview = try await APIClient.shared.previewActivation(code: value)
             guard preview.valid else {
-                error = preview.message
+                app.showToast(preview.message, kind: .error)
                 return
             }
             let redeemResult = try await APIClient.shared.redeemActivation(code: value)
             result = redeemResult
-            notice = "兑换成功：\(redeemResult.planName)"
+            app.showToast("兑换成功：\(redeemResult.planName)", kind: .success)
             code = ""
             await load()
             await app.refreshUser()
         } catch {
-            self.error = error.localizedDescription
+            app.report(error)
         }
     }
 }
@@ -206,7 +204,6 @@ struct CoinsView: View {
 
     @State private var payload: CoinsPayload?
     @State private var loading = true
-    @State private var error = ""
     @State private var copied = false
 
     var body: some View {
@@ -219,12 +216,12 @@ struct CoinsView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("我的金币").font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
                                 Text("\(payload?.coins ?? 0)").font(.system(size: 26, weight: .semibold))
-                                    .foregroundStyle(palette.foreground)
+                                    .foregroundStyle(DS.IconColor.orange)
                             }
                             Spacer()
                             Image(systemName: "bitcoinsign.circle.fill")
                                 .font(.system(size: 30))
-                                .foregroundStyle(palette.warningText)
+                                .foregroundStyle(DS.IconColor.orange)
                         }
                         if let payload, payload.coinExchangeEnabled {
                             Text("金币可在购买套餐时抵扣（以套餐设置的金币价为准）")
@@ -237,7 +234,10 @@ struct CoinsView: View {
                 if let payload, payload.inviteEnabled {
                     AppCard {
                         VStack(alignment: .leading, spacing: 10) {
-                            SectionHeader(title: "邀请好友", subtitle: "邀请注册双方均可获得金币奖励")
+                            HStack(spacing: 10) {
+                                IconTile(icon: "person.2.fill", color: DS.IconColor.teal)
+                                SectionHeader(title: "邀请好友", subtitle: "邀请注册双方均可获得金币奖励")
+                            }
                             HStack {
                                 Image(systemName: "link").foregroundStyle(palette.mutedForeground)
                                 Text(payload.inviteCode)
@@ -258,11 +258,12 @@ struct CoinsView: View {
                     }
                 }
 
-                if !error.isEmpty { BannerBar(message: error) }
-
                 AppCard {
                     VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(title: "金币流水")
+                        HStack(spacing: 10) {
+                            IconTile(icon: "list.bullet.rectangle.fill", color: DS.IconColor.violet)
+                            SectionHeader(title: "金币流水")
+                        }
                         if loading && payload == nil {
                             LoadingBlock()
                         } else if (payload?.logs ?? []).isEmpty {
@@ -309,7 +310,8 @@ struct CoinsView: View {
         do {
             payload = try await APIClient.shared.fetchCoins()
         } catch {
-            self.error = error.localizedDescription
+            if APIError.from(error).isCancelled { return }
+            app.report(error)
         }
     }
 }
@@ -325,8 +327,6 @@ struct FeedbackView: View {
     @State private var contact = ""
     @State private var items: [FeedbackItem] = []
     @State private var submitting = false
-    @State private var error = ""
-    @State private var notice = ""
 
     var body: some View {
         let palette = Palette(scheme: scheme)
@@ -334,7 +334,10 @@ struct FeedbackView: View {
             VStack(spacing: DS.Size.gapLarge) {
                 AppCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionHeader(title: "提交反馈", subtitle: "线路问题、建议都可以告诉我们")
+                        HStack(spacing: 10) {
+                            IconTile(icon: "paperplane.fill", color: DS.IconColor.blue)
+                            SectionHeader(title: "提交反馈", subtitle: "线路问题、建议都可以告诉我们")
+                        }
                         AppTextField(title: "标题", placeholder: "简要描述（选填）", text: $title)
                         VStack(alignment: .leading, spacing: 6) {
                             Text("内容").font(DS.Font.bodySmall).foregroundStyle(palette.mutedForeground)
@@ -348,9 +351,7 @@ struct FeedbackView: View {
                                 .foregroundStyle(palette.foreground)
                         }
                         AppTextField(title: "联系方式", placeholder: "邮箱 / Telegram（选填）", text: $contact)
-                        if !error.isEmpty { BannerBar(message: error) }
-                        if !notice.isEmpty { BannerBar(message: notice, kind: .success) }
-                        AppButton(title: "提交反馈", icon: "paperplane", loading: submitting) {
+                        AppButton(title: "提交反馈", icon: "paperplane.fill", loading: submitting) {
                             Task { await submit() }
                         }
                     }
@@ -358,7 +359,10 @@ struct FeedbackView: View {
 
                 AppCard {
                     VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(title: "我的反馈")
+                        HStack(spacing: 10) {
+                            IconTile(icon: "text.bubble.fill", color: DS.IconColor.teal)
+                            SectionHeader(title: "我的反馈")
+                        }
                         if items.isEmpty {
                             Text("暂无反馈记录").font(DS.Font.bodySmall)
                                 .foregroundStyle(palette.mutedForeground)
@@ -406,23 +410,21 @@ struct FeedbackView: View {
     }
 
     private func submit() async {
-        error = ""
-        notice = ""
         guard content.trimmingCharacters(in: .whitespacesAndNewlines).count >= 5 else {
-            error = "请填写反馈内容（至少 5 个字）"
+            app.showToast("请填写反馈内容（至少 5 个字）", kind: .warning)
             return
         }
         submitting = true
         defer { submitting = false }
         do {
             try await APIClient.shared.submitFeedback(lineId: nil, title: title, content: content, contact: contact)
-            notice = "提交成功，管理员会尽快处理"
+            app.showToast("提交成功，管理员会尽快处理", kind: .success)
             title = ""
             content = ""
             contact = ""
             await load()
         } catch {
-            self.error = error.localizedDescription
+            app.report(error)
         }
     }
 }
@@ -444,22 +446,19 @@ struct AccountSettingsView: View {
     @State private var currentQuestion: String?
     @State private var loaded = false
 
-    @State private var error = ""
-    @State private var notice = ""
-
     var body: some View {
         ScrollView {
             VStack(spacing: DS.Size.gapLarge) {
-                if !error.isEmpty { BannerBar(message: error) }
-                if !notice.isEmpty { BannerBar(message: notice, kind: .success) }
-
                 AppCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionHeader(title: "修改密码")
+                        HStack(spacing: 10) {
+                            IconTile(icon: "lock.fill", color: DS.IconColor.rose)
+                            SectionHeader(title: "修改密码")
+                        }
                         AppTextField(title: "原密码", placeholder: "当前登录密码", text: $oldPassword, secure: true)
                         AppTextField(title: "新密码", placeholder: "至少 6 位", text: $newPassword, secure: true)
                         AppTextField(title: "确认新密码", placeholder: "再次输入新密码", text: $confirmPassword, secure: true)
-                        AppButton(title: "保存新密码", loading: savingPassword) {
+                        AppButton(title: "保存新密码", icon: "checkmark.shield.fill", loading: savingPassword) {
                             Task { await changePassword() }
                         }
                     }
@@ -467,10 +466,13 @@ struct AccountSettingsView: View {
 
                 AppCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionHeader(
-                            title: "密保问题",
-                            subtitle: currentQuestion?.isEmpty == false ? "当前：\(currentQuestion ?? "")" : "用于找回密码，建议设置"
-                        )
+                        HStack(spacing: 10) {
+                            IconTile(icon: "questionmark.key.filled", color: DS.IconColor.indigo)
+                            SectionHeader(
+                                title: "密保问题",
+                                subtitle: currentQuestion?.isEmpty == false ? "当前：\(currentQuestion ?? "")" : "用于找回密码，建议设置"
+                            )
+                        }
                         AppTextField(title: "密保问题", placeholder: "例如：我的第一台服务器名字", text: $question)
                         AppTextField(title: "密保答案", placeholder: "找回密码时使用（不区分大小写）", text: $answer)
                         AppButton(title: "保存密保", style: .secondary, loading: savingSecurity) {
@@ -496,28 +498,30 @@ struct AccountSettingsView: View {
     }
 
     private func changePassword() async {
-        error = ""
-        notice = ""
-        guard newPassword.count >= 6 else { error = "新密码至少 6 位"; return }
-        guard newPassword == confirmPassword else { error = "两次输入的新密码不一致"; return }
+        guard newPassword.count >= 6 else {
+            app.showToast("新密码至少 6 位", kind: .warning)
+            return
+        }
+        guard newPassword == confirmPassword else {
+            app.showToast("两次输入的新密码不一致", kind: .warning)
+            return
+        }
         savingPassword = true
         defer { savingPassword = false }
         do {
             try await APIClient.shared.changePassword(old: oldPassword, new: newPassword)
-            notice = "密码已更新"
+            app.showToast("密码已更新", kind: .success)
             oldPassword = ""
             newPassword = ""
             confirmPassword = ""
         } catch {
-            self.error = error.localizedDescription
+            app.report(error)
         }
     }
 
     private func saveSecurity() async {
-        error = ""
-        notice = ""
         guard !question.isEmpty, answer.count >= 2 else {
-            error = "请填写密保问题与答案（答案至少 2 个字符）"
+            app.showToast("请填写密保问题与答案（答案至少 2 个字符）", kind: .warning)
             return
         }
         savingSecurity = true
@@ -525,10 +529,10 @@ struct AccountSettingsView: View {
         do {
             try await APIClient.shared.updateSecurity(question: question, answer: answer)
             currentQuestion = question
-            notice = "密保已保存"
+            app.showToast("密保已保存", kind: .success)
             answer = ""
         } catch {
-            self.error = error.localizedDescription
+            app.report(error)
         }
     }
 }

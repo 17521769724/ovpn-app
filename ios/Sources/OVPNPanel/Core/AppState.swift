@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// 全局应用状态：主控地址、登录态、用户信息
+/// 全局应用状态：主控地址、登录态、用户信息、全局横幅提示
 @MainActor
 final class AppState: ObservableObject {
 
@@ -14,10 +14,11 @@ final class AppState: ObservableObject {
     @Published var phase: Phase = .setup
     @Published var masterURL: String = ""
     @Published var user: AppUser?
-    @Published var banner: String?
+    @Published var toast: ToastMessage?
     @Published var busy: Bool = false
 
     private let api = APIClient.shared
+    private var toastToken = UUID()
 
     init() {
         restore()
@@ -54,6 +55,7 @@ final class AppState: ObservableObject {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
+            if APIError.from(error).isCancelled { throw APIError.cancelled }
             throw APIError.network("无法连接该地址：\(error.localizedDescription)")
         }
 
@@ -84,12 +86,17 @@ final class AppState: ObservableObject {
         let result = try await api.login(username: account, password: password)
         applyAuth(result)
         LocalStore.lastAccount = account
+        // 保存连接 VPN 用的登录密码（OpenVPN 采用账号密码认证）
+        Keychain.save(password, account: Keychain.passwordAccount)
     }
 
-    func register(username: String, password: String, email: String) async throws {
-        let result = try await api.register(username: username, password: password, email: email)
+    func register(username: String, password: String, email: String,
+                  captchaToken: String, captchaInput: String) async throws {
+        let result = try await api.register(username: username, password: password, email: email,
+                                            captchaToken: captchaToken, captchaInput: captchaInput)
         applyAuth(result)
         LocalStore.lastAccount = username
+        Keychain.save(password, account: Keychain.passwordAccount)
     }
 
     private func applyAuth(_ result: AuthResult) {
@@ -115,6 +122,7 @@ final class AppState: ObservableObject {
         Keychain.clear()
         user = nil
         phase = .auth
+        dismissToast()
     }
 
     /// 切换主控（回到配置页）
@@ -125,7 +133,39 @@ final class AppState: ObservableObject {
         phase = .setup
     }
 
-    func toast(_ message: String) {
-        banner = message
+    // MARK: - 全局横幅提示（与 Web 端 toast 一致）
+
+    /// 非隔离入口：任何上下文都能直接调用（内部切回主线程更新 UI）
+    nonisolated func showToast(_ message: String, kind: BannerKind = .info) {
+        Task { @MainActor in
+            self.presentToast(message, kind: kind)
+        }
+    }
+
+    /// 统一错误上报：取消类错误静默忽略，其余以红色横幅提示
+    nonisolated func report(_ error: Error) {
+        let apiError = APIError.from(error)
+        if apiError.isCancelled { return }
+        showToast(apiError.localizedDescription, kind: .error)
+    }
+
+    func dismissToast() {
+        toastToken = UUID()
+        withAnimation(.easeInOut(duration: 0.18)) { toast = nil }
+    }
+
+    private func presentToast(_ message: String, kind: BannerKind) {
+        let value = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        let token = UUID()
+        toastToken = token
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            toast = ToastMessage(text: value, kind: kind)
+        }
+        let duration: Double = kind == .error ? 3.6 : 2.6
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            guard let self, self.toastToken == token else { return }
+            self.dismissToast()
+        }
     }
 }
