@@ -64,7 +64,7 @@ struct AnnouncementsView: View {
         }
         .pageBackground()
         .navigationTitle("公告")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .task { await load() }
         .refreshable { await load() }
     }
@@ -159,7 +159,7 @@ struct ActivationView: View {
         }
         .pageBackground()
         .navigationTitle("激活码")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .task { await load() }
     }
 
@@ -300,7 +300,7 @@ struct CoinsView: View {
         }
         .pageBackground()
         .navigationTitle("金币与邀请")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .task { await load() }
     }
 
@@ -401,7 +401,7 @@ struct FeedbackView: View {
         }
         .pageBackground()
         .navigationTitle("问题反馈")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .task { await load() }
     }
 
@@ -424,6 +424,190 @@ struct FeedbackView: View {
             contact = ""
             await load()
         } catch {
+            app.report(error)
+        }
+    }
+}
+
+// MARK: - 邀请（独立 Tab）
+
+/// 邀请好友：展示邀请码 / 邀请链接 / 奖励规则，支持一键复制与系统分享
+struct InviteView: View {
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+
+    @State private var payload: CoinsPayload?
+    @State private var loading = true
+    @State private var copiedCode = false
+    @State private var copiedLink = false
+
+    var body: some View {
+        let palette = Palette(scheme: scheme)
+        ScrollView {
+            VStack(spacing: DS.Size.gapLarge) {
+                hero(palette)
+
+                if let payload {
+                    if payload.inviteEnabled {
+                        codeCard(palette, payload: payload)
+                        rewardCard(palette, payload: payload)
+                        tipCard(palette)
+                    } else {
+                        BannerBar(message: "站点当前已关闭邀请奖励", kind: .warning)
+                    }
+                } else if loading {
+                    LoadingBlock(text: "正在获取邀请信息…")
+                }
+            }
+            .padding(.horizontal, DS.Size.pagePadding)
+            .padding(.top, 8)
+            .padding(.bottom, 28)
+        }
+        .pageBackground()
+        .navigationTitle("邀请好友")
+        .navigationBarTitleDisplayMode(.large)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func hero(_ palette: Palette) -> some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: DS.Radius.xxl)
+                .fill(
+                    LinearGradient(colors: [DS.Brand.teal, DS.Brand.blue],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("邀请好友得金币")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                Text("好友通过你的邀请码注册，双方均可获得金币奖励，金币可用于兑换套餐。")
+                    .font(DS.Font.caption)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) {
+                    Image(systemName: "bitcoinsign.circle.fill")
+                    Text("我的金币 \(payload?.coins ?? 0)")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.white.opacity(0.18))
+                .clipShape(Capsule())
+            }
+            .padding(18)
+        }
+    }
+
+    private func codeCard(_ palette: Palette, payload: CoinsPayload) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    IconTile(icon: "number.square.fill", color: DS.IconColor.teal)
+                    SectionHeader(title: "我的邀请码", subtitle: "分享给好友即可参与")
+                }
+                HStack {
+                    Text(payload.inviteCode)
+                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.foreground)
+                        .textSelection(.enabled)
+                    Spacer()
+                    AppButton(title: copiedCode ? "已复制" : "复制", icon: copiedCode ? "checkmark" : "doc.on.doc",
+                              style: .secondary, height: DS.Size.buttonHeightSmall) {
+                        UIPasteboard.general.string = payload.inviteCode
+                        copiedCode = true
+                        Haptics.success()
+                        app.showToast("邀请码已复制", kind: .success)
+                    }
+                    .frame(width: 104)
+                }
+
+                if !payload.inviteUrl.isEmpty {
+                    Divider().overlay(palette.border)
+                    Text("邀请链接")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(palette.mutedForeground)
+                    Text(payload.inviteUrl)
+                        .font(DS.Font.caption)
+                        .foregroundStyle(palette.secondaryText)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                    HStack(spacing: 10) {
+                        AppButton(title: copiedLink ? "已复制" : "复制链接",
+                                  icon: "link", style: .secondary,
+                                  height: DS.Size.buttonHeightSmall) {
+                            UIPasteboard.general.string = payload.inviteUrl
+                            copiedLink = true
+                            Haptics.success()
+                            app.showToast("邀请链接已复制", kind: .success)
+                        }
+                        if let url = URL(string: payload.inviteUrl) {
+                            ShareLink(item: url) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 13, weight: .semibold))
+                                    Text("分享").font(.system(size: 14, weight: .semibold))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: DS.Size.buttonHeightSmall)
+                                .foregroundStyle(.white)
+                                .background(palette.accentGradient)
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                            }
+                            .buttonStyle(PressableStyle())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func rewardCard(_ palette: Palette, payload: CoinsPayload) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    IconTile(icon: "gift.fill", color: DS.IconColor.orange)
+                    SectionHeader(title: "奖励规则")
+                }
+                rewardRow(palette, icon: "person.fill.checkmark", title: "邀请人奖励",
+                          value: "\(payload.inviteRewardCoins) 金币", color: DS.IconColor.emerald)
+                rewardRow(palette, icon: "person.fill.badge.plus", title: "被邀请人奖励",
+                          value: "\(payload.inviteeRewardCoins) 金币", color: DS.IconColor.blue)
+                rewardRow(palette, icon: "sparkles", title: "新用户注册赠送",
+                          value: "\(payload.registerCoins) 金币", color: DS.IconColor.violet)
+            }
+        }
+    }
+
+    private func rewardRow(_ palette: Palette, icon: String, title: String, value: String, color: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 26, height: 26)
+                .background(color.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
+            Text(title).font(DS.Font.bodySmall).foregroundStyle(palette.secondaryText)
+            Spacer()
+            Text(value).font(DS.Font.value).foregroundStyle(DS.IconColor.orange)
+        }
+    }
+
+    private func tipCard(_ palette: Palette) -> some View {
+        BannerBar(message: "好友注册成功后，奖励金币会自动到账，可在「套餐」页使用金币兑换套餐。", kind: .info)
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            payload = try await APIClient.shared.fetchCoins()
+        } catch {
+            if APIError.from(error).isCancelled { return }
             app.report(error)
         }
     }
@@ -489,7 +673,7 @@ struct AccountSettingsView: View {
         }
         .pageBackground()
         .navigationTitle("账号设置")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .task {
             guard !loaded else { return }
             loaded = true

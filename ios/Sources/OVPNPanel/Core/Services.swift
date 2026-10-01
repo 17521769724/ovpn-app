@@ -103,9 +103,14 @@ extension APIClient {
         try await request("/api/v1/lines", as: LinesPayload.self)
     }
 
-    func fetchLineConfig(lineId: Int, nodeId: Int) async throws -> LineConfig {
+    func fetchLineConfig(lineId: Int, nodeId: Int, family: String = "v4") async throws -> LineConfig {
         try await request("/api/v1/lines/\(lineId)/config",
-                          query: ["nodeId": String(nodeId)], as: LineConfig.self)
+                          query: ["nodeId": String(nodeId), "family": family], as: LineConfig.self)
+    }
+
+    /// 账号异常状态与通知（套餐到期、流量耗尽、被管理员断开等）
+    func fetchUserStatus() async throws -> UserStatusPayload {
+        try await request("/api/v1/user/status", as: UserStatusPayload.self)
     }
 
     // 用户中心
@@ -141,9 +146,12 @@ extension APIClient {
         try await request("/api/v1/orders", query: ["page": String(page)], as: OrdersPayload.self)
     }
 
-    func createOrder(planId: Int, method: String) async throws -> CreateOrderPayload {
-        try await request("/api/v1/orders", method: "POST",
-                          body: ["plan_id": planId, "method": method], as: CreateOrderPayload.self)
+    func createOrder(planId: Int, method: String,
+                     useCoins: Bool = false, payWithBalance: Bool = false) async throws -> CreateOrderPayload {
+        var body: [String: Any] = ["plan_id": planId, "method": method]
+        if useCoins { body["use_coins"] = true }
+        if payWithBalance { body["pay_with_balance"] = true }
+        return try await request("/api/v1/orders", method: "POST", body: body, as: CreateOrderPayload.self)
     }
 
     /// 继续支付（复用原订单，不再新建订单）

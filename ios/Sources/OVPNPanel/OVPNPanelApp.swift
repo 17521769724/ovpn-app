@@ -47,6 +47,7 @@ struct MainTabView: View {
     private let items: [(icon: String, activeIcon: String, title: String, color: Color)] = [
         ("bolt.horizontal.circle", "bolt.horizontal.circle.fill", "线路", DS.IconColor.sky),
         ("shippingbox", "shippingbox.fill", "套餐", DS.IconColor.violet),
+        ("person.badge.plus", "person.badge.plus", "邀请", DS.IconColor.teal),
         ("person.crop.circle", "person.crop.circle.fill", "我的", DS.IconColor.emerald),
     ]
 
@@ -59,6 +60,8 @@ struct MainTabView: View {
                     NavigationStack { HomeView() }
                 case 1:
                     NavigationStack { PlansView() }
+                case 2:
+                    NavigationStack { InviteView() }
                 default:
                     NavigationStack { ProfileView() }
                 }
@@ -75,12 +78,13 @@ struct MainTabView: View {
         HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button {
-                    tab = index
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { tab = index }
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: tab == index ? item.activeIcon : item.icon)
                             .font(.system(size: 19, weight: tab == index ? .semibold : .regular))
                             .foregroundStyle(tab == index ? item.color : palette.mutedForeground)
+                            .scaleEffect(tab == index ? 1.06 : 1)
                         Text(item.title)
                             .font(.system(size: 11, weight: tab == index ? .semibold : .regular))
                             .foregroundStyle(tab == index ? palette.foreground : palette.mutedForeground)
@@ -89,7 +93,7 @@ struct MainTabView: View {
                     .frame(height: DS.Size.tabBarHeight)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle(scale: 0.88, haptic: true))
             }
         }
         .background(palette.background)

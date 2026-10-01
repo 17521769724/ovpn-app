@@ -71,9 +71,25 @@ struct ServerNode: Decodable, Identifiable {
     let txRate: Int64?
     let usable: Bool
     let unusableReason: String
+    /// IPv6 地址（v6 优先连接用，未配置则为空/缺失）
+    let addressV6: String?
+    let hasIPv4: Bool?
+    let hasIPv6: Bool?
 
     var rxRateValue: Int64 { rxRate ?? 0 }
     var txRateValue: Int64 { txRate ?? 0 }
+
+    /// 是否支持 IPv6（兼容老版本主控：缺失该字段时按 address_v6 是否有值判断）
+    var supportsIPv6: Bool {
+        if let hasIPv6 { return hasIPv6 }
+        return !(addressV6 ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// 是否支持 IPv4（老主控默认支持）
+    var supportsIPv4: Bool {
+        if let hasIPv4 { return hasIPv4 }
+        return !address.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     var statusText: String {
         switch status {
@@ -187,6 +203,24 @@ struct PlanItem: Decodable, Identifiable {
     let speedLimitKbps: Int
     let deviceLimit: Int
     let isCurrent: Bool
+    /// 赠送等级（购买后解锁的服务器等级）
+    let level: Int?
+    /// 金币兑换所需金币，0 或空表示不可金币兑换
+    let coinPrice: Int?
+    /// 赠送金币
+    let bonusCoins: Int?
+    let coinExchangeEnabled: Bool?
+    let canExchange: Bool?
+    let canUseBalance: Bool?
+
+    var coinPriceValue: Int { coinPrice ?? 0 }
+    var bonusCoinsValue: Int { bonusCoins ?? 0 }
+    var levelValue: Int { level ?? 1 }
+    /// 是否可用金币兑换（兼容老主控）
+    var exchangeable: Bool {
+        if let canExchange { return canExchange }
+        return coinPriceValue > 0
+    }
 }
 
 struct PlansPayload: Decodable {
@@ -195,6 +229,14 @@ struct PlansPayload: Decodable {
     let currencySymbol: String
     let nodeOnline: Int
     let nodeTotal: Int
+    let user: PlanUser?
+
+    struct PlanUser: Decodable {
+        let level: Int
+        let coins: Int
+        let balanceCents: Int
+        let balanceYuan: Double
+    }
 }
 
 struct OrderItem: Decodable, Identifiable {
@@ -252,6 +294,13 @@ struct CreateOrderPayload: Decodable {
     let method: String
     let needManual: Bool
     let message: String
+    /// 金币全额兑换 / 余额全额抵扣时由主控直接发货
+    let paid: Bool?
+    let coins: Int?
+    let payableCents: Int?
+    let balanceUsedCents: Int?
+
+    var paidValue: Bool { paid ?? false }
 
     struct OrderBrief: Decodable {
         let id: Int
@@ -260,6 +309,37 @@ struct CreateOrderPayload: Decodable {
         let status: String
         let expiresAt: String?
         let planName: String
+    }
+}
+
+// MARK: - 账号状态与通知
+
+struct UserBlock: Decodable {
+    let blocked: Bool
+    let reason: String
+    let blockedUntil: String?
+    let remainingMinutes: Int
+}
+
+struct StatusNotice: Decodable {
+    let code: String
+    let message: String
+    let at: String?
+
+    /// 去重键：同一状态必须稳定，避免轮询重复弹窗
+    var key: String { "\(code)|\(at ?? "")" }
+}
+
+struct UserStatusPayload: Decodable {
+    let status: String?
+    let quota: Quota?
+    let block: UserBlock?
+    let recentKick: RecentKick?
+    let notice: StatusNotice?
+    let serverTime: String?
+
+    struct RecentKick: Decodable {
+        let at: String?
     }
 }
 

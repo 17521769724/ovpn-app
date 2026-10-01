@@ -19,6 +19,8 @@ final class AppState: ObservableObject {
 
     private let api = APIClient.shared
     private var toastToken = UUID()
+    private var statusTask: Task<Void, Never>?
+    private var lastNoticeKey: String?
 
     init() {
         restore()
@@ -32,6 +34,7 @@ final class AppState: ObservableObject {
                 api.setToken(token)
                 phase = .main
                 Task { await refreshUser() }
+                startStatusPolling()
             } else {
                 phase = .auth
             }
@@ -104,6 +107,7 @@ final class AppState: ObservableObject {
         SecureStore.save(result.token)
         user = result.user
         phase = .main
+        startStatusPolling()
     }
 
     func refreshUser() async {
@@ -118,11 +122,60 @@ final class AppState: ObservableObject {
     }
 
     func logout() {
+        stopStatusPolling()
         api.setToken(nil)
         SecureStore.clear()
         user = nil
         phase = .auth
         dismissToast()
+    }
+
+    // MARK: - 账号异常状态轮询（被管理员断开 / 套餐到期 / 流量耗尽 / 封禁）
+
+    func startStatusPolling() {
+        statusTask?.cancel()
+        lastNoticeKey = nil
+        statusTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.pollStatus()
+                // 轮询间隔 8s：被管理员断开等异常能较快以横幅提示
+                try? await Task.sleep(nanoseconds: 8 * 1_000_000_000)
+            }
+        }
+    }
+
+    func stopStatusPolling() {
+        statusTask?.cancel()
+        statusTask = nil
+    }
+
+    /// 立即检查一次（连接失败、下单后等需要即时反馈的场景）
+    func checkStatusNow() async {
+        await pollStatus()
+    }
+
+    private func pollStatus() async {
+        guard phase == .main else { return }
+        guard let payload = try? await api.fetchUserStatus() else { return }
+        guard let notice = payload.notice else {
+            // 状态恢复正常，允许下次同样的问题重新提示
+            lastNoticeKey = nil
+            return
+        }
+        guard notice.key != lastNoticeKey else { return }
+        lastNoticeKey = notice.key
+
+        let kind: BannerKind = (notice.code == "blocked" || notice.code == "banned"
+                                || notice.code == "expired" || notice.code == "over_quota")
+            ? .error : .warning
+        showToast(notice.message, kind: kind)
+        Haptics.warning()
+
+        // 被管理员断开 / 封禁：本地同步断开隧道，避免界面仍停留在「已连接」
+        if notice.code == "blocked" || notice.code == "banned" {
+            await VPNManager.shared.disconnect()
+        }
+        if payload.quota?.valid != true { await refreshUser() }
     }
 
     /// 切换主控（回到配置页）

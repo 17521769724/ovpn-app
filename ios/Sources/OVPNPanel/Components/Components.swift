@@ -25,6 +25,42 @@ struct SafariSheet: UIViewControllerRepresentable {
     }
 }
 
+// MARK: - 交互反馈（iOS 18 风格：按下缩放 + 轻震动）
+
+enum Haptics {
+    static func tap() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    static func success() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    static func warning() {
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+    }
+
+    static func error() {
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+    }
+}
+
+/// 卡片/列表行等自定义可点元素的按下反馈
+struct PressableStyle: ButtonStyle {
+    var scale: CGFloat = 0.97
+    var haptic: Bool = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .opacity(configuration.isPressed ? 0.9 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { pressed in
+                if pressed && haptic { Haptics.tap() }
+            }
+    }
+}
+
 // MARK: - 页面容器
 
 struct PageBackground: ViewModifier {
@@ -42,7 +78,7 @@ extension View {
 // MARK: - 按钮
 
 struct AppButton: View {
-    enum Style { case primary, secondary, outline, destructive }
+    enum Style { case primary, accent, secondary, outline, destructive }
 
     let title: String
     var icon: String?
@@ -56,7 +92,10 @@ struct AppButton: View {
 
     var body: some View {
         let palette = Palette(scheme: scheme)
-        Button(action: action) {
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
             HStack(spacing: 6) {
                 if loading {
                     ProgressView()
@@ -64,9 +103,9 @@ struct AppButton: View {
                         .tint(foreground(palette))
                         .scaleEffect(0.8)
                 } else if let icon {
-                    Image(systemName: icon).font(.system(size: 15, weight: .medium))
+                    Image(systemName: icon).font(.system(size: 14, weight: .semibold))
                 }
-                Text(title).font(DS.Font.body).fontWeight(.medium)
+                Text(title).font(.system(size: 15, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
             .frame(height: height)
@@ -77,32 +116,41 @@ struct AppButton: View {
                     .stroke(strokeColor(palette), lineWidth: style == .outline ? 1 : 0)
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+            .shadow(color: shadowColor(palette), radius: 8, y: 3)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(haptic: false))
         .disabled(disabled || loading)
         .opacity(disabled ? 0.5 : 1)
     }
 
     private func foreground(_ palette: Palette) -> Color {
         switch style {
-        case .primary: return palette.primaryForeground
+        case .primary, .accent, .destructive: return .white
         case .secondary: return palette.secondaryForeground
         case .outline: return palette.foreground
-        case .destructive: return .white
         }
     }
 
-    private func background(_ palette: Palette) -> Color {
+    @ViewBuilder
+    private func background(_ palette: Palette) -> some View {
         switch style {
-        case .primary: return palette.primary
-        case .secondary: return palette.secondary
-        case .outline: return .clear
-        case .destructive: return palette.destructive
+        case .primary, .accent: palette.accentGradient
+        case .secondary: palette.secondary
+        case .outline: palette.card
+        case .destructive: palette.dangerGradient
         }
     }
 
     private func strokeColor(_ palette: Palette) -> Color {
         style == .outline ? palette.border : .clear
+    }
+
+    private func shadowColor(_ palette: Palette) -> Color {
+        switch style {
+        case .primary, .accent: return DS.Brand.blue.opacity(0.25)
+        case .destructive: return DS.Brand.red.opacity(0.24)
+        default: return .clear
+        }
     }
 }
 
@@ -118,18 +166,90 @@ struct ChipButton: View {
         let palette = Palette(scheme: scheme)
         Button(action: action) {
             Text(title)
-                .font(DS.Font.bodySmall)
+                .font(.system(size: 13, weight: selected ? .semibold : .regular))
                 .padding(.horizontal, 12)
                 .frame(height: DS.Size.buttonHeightSmall)
-                .foregroundStyle(selected ? palette.primaryForeground : palette.foreground)
-                .background(selected ? palette.primary : palette.card)
+                .foregroundStyle(selected ? .white : palette.foreground)
+                .background(selected ? AnyView(palette.accentGradient) : AnyView(palette.card))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md)
                         .stroke(palette.border, lineWidth: selected ? 0 : 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
+    }
+}
+
+/// 圆形图标按钮（刷新等），带 iOS 18 风格按下反馈
+struct IconActionButton: View {
+    let icon: String
+    var size: CGFloat = 34
+    var loading: Bool = false
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let palette = Palette(scheme: scheme)
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
+            Group {
+                if loading {
+                    ProgressView().scaleEffect(0.8)
+                } else {
+                    Image(systemName: icon).font(.system(size: size * 0.42, weight: .medium))
+                }
+            }
+            .foregroundStyle(palette.foreground)
+            .frame(width: size, height: size)
+            .background(palette.card)
+            .overlay(Circle().stroke(palette.border, lineWidth: 1))
+            .clipShape(Circle())
+        }
+        .buttonStyle(PressableStyle(scale: 0.9, haptic: false))
+        .disabled(loading)
+    }
+}
+
+/// 分段切换（流量 近 7 天 / 近 15 天）
+struct SegmentedTabs: View {
+    let items: [String]
+    @Binding var selection: Int
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let palette = Palette(scheme: scheme)
+        HStack(spacing: 2) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                Button {
+                    Haptics.tap()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selection = index }
+                } label: {
+                    Text(item)
+                        .font(.system(size: 12, weight: selection == index ? .semibold : .regular))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                        .foregroundStyle(selection == index ? palette.foreground : palette.mutedForeground)
+                        .background(
+                            Group {
+                                if selection == index {
+                                    RoundedRectangle(cornerRadius: DS.Radius.sm)
+                                        .fill(palette.card)
+                                        .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                                }
+                            }
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(palette.muted)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 }
 
@@ -147,7 +267,7 @@ struct AppTextField: View {
     var body: some View {
         let palette = Palette(scheme: scheme)
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(DS.Font.bodySmall).foregroundStyle(palette.mutedForeground)
+            Text(title).font(DS.Font.bodySmall).foregroundStyle(palette.secondaryText)
             Group {
                 if secure {
                     SecureField(placeholder, text: $text)
@@ -203,8 +323,8 @@ struct StatusBadge: View {
 
     var body: some View {
         Text(text)
-            .font(DS.Font.caption)
-            .padding(.horizontal, 8)
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(background)
             .foregroundStyle(foreground)
@@ -253,8 +373,9 @@ struct StatBar: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(palette.muted)
                     Capsule()
-                        .fill(palette.primary.opacity(0.75))
+                        .fill(palette.accentGradient)
                         .frame(width: max(0, min(1, value / 100)) * geo.size.width)
+                        .animation(.easeOut(duration: 0.5), value: value)
                 }
             }
             .frame(height: 6)
@@ -283,8 +404,9 @@ struct InfoRow: View {
             Text(label).font(DS.Font.bodySmall).foregroundStyle(palette.mutedForeground)
             Spacer(minLength: 12)
             Text(value)
-                .font(DS.Font.number)
-                .foregroundStyle(valueColor ?? palette.foreground)
+                .font(DS.Font.value)
+                // 默认使用柔和的次级文字色，避免右侧数值过黑、与整体不协调
+                .foregroundStyle(valueColor ?? palette.secondaryText)
                 .multilineTextAlignment(.trailing)
         }
     }
@@ -343,12 +465,14 @@ struct LoadingBlock: View {
     }
 }
 
+// MARK: - 提示
+
 /// 提示类型（内联提示条与全局横幅共用）
 enum BannerKind {
     case success, error, warning, info
 }
 
-/// 顶部提示条（错误/警告/成功，用于页面内常驻状态）
+/// 页面内常驻提示条
 struct BannerBar: View {
     let message: String
     var kind: BannerKind = .error
@@ -377,8 +501,6 @@ struct BannerBar: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 }
-
-// MARK: - 全局横幅提示（与 Web 端 sonner 一致：顶部居中、彩色、圆角、带图标）
 
 struct ToastMessage: Identifiable, Equatable {
     let id = UUID()
@@ -433,7 +555,7 @@ struct ToastHost: View {
             }
             Spacer()
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: app.toast)
+        .animation(.spring(response: 0.34, dampingFraction: 0.84), value: app.toast)
         .allowsHitTesting(app.toast != nil)
     }
 }
@@ -447,11 +569,14 @@ struct IconTile: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: size * 0.3)
-            .fill(color.opacity(0.14))
+            .fill(
+                LinearGradient(colors: [color.opacity(0.22), color.opacity(0.12)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            )
             .frame(width: size, height: size)
             .overlay(
                 Image(systemName: icon)
-                    .font(.system(size: size * 0.48, weight: .semibold))
+                    .font(.system(size: size * 0.46, weight: .semibold))
                     .foregroundStyle(color)
             )
     }

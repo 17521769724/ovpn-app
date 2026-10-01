@@ -16,14 +16,15 @@ enum DS {
 
     // MARK: - 控件尺寸（三端硬性对齐）
     enum Size {
-        static let buttonHeight: CGFloat = 48     // 主操作按钮高度
-        static let buttonHeightSmall: CGFloat = 34 // 次级/小按钮
-        static let inputHeight: CGFloat = 48      // 输入框高度
+        static let buttonHeight: CGFloat = 42     // 主操作按钮高度（略微收紧，更接近 iOS 18 比例）
+        static let buttonHeightLarge: CGFloat = 46 // 连接等强调按钮
+        static let buttonHeightSmall: CGFloat = 30 // 次级/小按钮
+        static let inputHeight: CGFloat = 42      // 输入框高度
         static let cardPadding: CGFloat = 16
         static let pagePadding: CGFloat = 16
         static let gap: CGFloat = 12
         static let gapLarge: CGFloat = 16
-        static let tabBarHeight: CGFloat = 56
+        static let tabBarHeight: CGFloat = 54
     }
 
     // MARK: - 字号
@@ -33,39 +34,52 @@ enum DS {
         static let body = SwiftUI.Font.system(size: 15)
         static let bodySmall = SwiftUI.Font.system(size: 13)
         static let caption = SwiftUI.Font.system(size: 12)
+        static let value = SwiftUI.Font.system(size: 13, weight: .regular)  // 列表右侧数值（柔化，避免过重）
         static let number = SwiftUI.Font.system(size: 15, weight: .medium).monospacedDigit()
+    }
+
+    // MARK: - 品牌色（按钮与强调元素，避免全局纯黑）
+    enum Brand {
+        static let blue = Color(hex: 0x2F6BFF)
+        static let blueDeep = Color(hex: 0x1D4ED8)
+        static let indigo = Color(hex: 0x5B5BF0)
+        static let indigoDeep = Color(hex: 0x4338CA)
+        static let teal = Color(hex: 0x0E9F9F)
+        static let tealDeep = Color(hex: 0x0F766E)
+        static let red = Color(hex: 0xE5484D)
+        static let redDeep = Color(hex: 0xC02830)
     }
 
     // MARK: - 颜色（亮色）
     enum Light {
-        static let background = Color(hex: 0xFFFFFF)
+        static let background = Color(hex: 0xF7F7F8)
         static let foreground = Color(hex: 0x0A0A0A)
         static let card = Color(hex: 0xFFFFFF)
         static let cardForeground = Color(hex: 0x0A0A0A)
-        static let primary = Color(hex: 0x171717)
-        static let primaryForeground = Color(hex: 0xFAFAFA)
-        static let secondary = Color(hex: 0xF5F5F5)
-        static let secondaryForeground = Color(hex: 0x171717)
-        static let muted = Color(hex: 0xF5F5F5)
-        static let mutedForeground = Color(hex: 0x737373)
-        static let border = Color(hex: 0xE5E5E5)
-        static let destructive = Color(hex: 0xE7000B)
+        static let primary = Color(hex: 0x2F6BFF)
+        static let primaryForeground = Color(hex: 0xFFFFFF)
+        static let secondary = Color(hex: 0xEDF1FA)
+        static let secondaryForeground = Color(hex: 0x2F4A7A)
+        static let muted = Color(hex: 0xF1F2F4)
+        static let mutedForeground = Color(hex: 0x808690)
+        static let border = Color(hex: 0xE6E8EC)
+        static let destructive = Color(hex: 0xE5484D)
     }
 
     // MARK: - 颜色（暗色）
     enum Dark {
         static let background = Color(hex: 0x0A0A0A)
         static let foreground = Color(hex: 0xFAFAFA)
-        static let card = Color(hex: 0x171717)
+        static let card = Color(hex: 0x161618)
         static let cardForeground = Color(hex: 0xFAFAFA)
-        static let primary = Color(hex: 0xE5E5E5)
-        static let primaryForeground = Color(hex: 0x171717)
-        static let secondary = Color(hex: 0x262626)
-        static let secondaryForeground = Color(hex: 0xFAFAFA)
-        static let muted = Color(hex: 0x262626)
-        static let mutedForeground = Color(hex: 0xA1A1A1)
-        static let border = Color.white.opacity(0.1)
-        static let destructive = Color(hex: 0xFF6467)
+        static let primary = Color(hex: 0x5B8CFF)
+        static let primaryForeground = Color(hex: 0x0A1225)
+        static let secondary = Color(hex: 0x1F2733)
+        static let secondaryForeground = Color(hex: 0xC7D6F5)
+        static let muted = Color(hex: 0x232326)
+        static let mutedForeground = Color(hex: 0xA1A1A6)
+        static let border = Color.white.opacity(0.10)
+        static let destructive = Color(hex: 0xFF6B70)
     }
 
     // MARK: - 状态色（Tailwind 色板，与 Web 端一致）
@@ -172,11 +186,44 @@ struct Palette {
     var warningText: Color { isDark ? Color(hex: 0xFBBF24) : DS.Status.warningText }
 
     /// 次级文字：比 mutedForeground 更深，保证手机上的可读性
-    var secondaryText: Color { isDark ? Color(hex: 0xD4D4D4) : Color(hex: 0x404040) }
+    var secondaryText: Color { isDark ? Color(hex: 0xC9CCD2) : Color(hex: 0x5A6068) }
 
     /// 流量统计统一纯绿色
     var trafficBar: Color { DS.Traffic.bar }
     var trafficTracker: Color { isDark ? Color(hex: 0x064E3B) : DS.Traffic.tracker }
+
+    // MARK: 品牌渐变（按钮）
+    var accentGradient: LinearGradient {
+        isDark
+            ? LinearGradient(colors: [Color(hex: 0x6E9BFF), Color(hex: 0x4F7BFF)],
+                             startPoint: .topLeading, endPoint: .bottomTrailing)
+            : LinearGradient(colors: [DS.Brand.blue, DS.Brand.blueDeep],
+                             startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    var indigoGradient: LinearGradient {
+        isDark
+            ? LinearGradient(colors: [Color(hex: 0x8B8BF7), Color(hex: 0x6366F1)],
+                             startPoint: .topLeading, endPoint: .bottomTrailing)
+            : LinearGradient(colors: [DS.Brand.indigo, DS.Brand.indigoDeep],
+                             startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    var dangerGradient: LinearGradient {
+        isDark
+            ? LinearGradient(colors: [Color(hex: 0xFF7C80), Color(hex: 0xE5484D)],
+                             startPoint: .topLeading, endPoint: .bottomTrailing)
+            : LinearGradient(colors: [DS.Brand.red, DS.Brand.redDeep],
+                             startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    /// 连接成功后圆环使用的渐变
+    var connectionGradient: AngularGradient {
+        AngularGradient(
+            colors: [DS.Traffic.bar, Color(hex: 0x22D3EE), DS.Brand.blue, DS.Brand.indigo, DS.Traffic.bar],
+            center: .center
+        )
+    }
 
     func toastStyle(_ kind: BannerKind) -> DS.ToastStyle { DS.ToastStyle.of(kind, dark: isDark) }
 }

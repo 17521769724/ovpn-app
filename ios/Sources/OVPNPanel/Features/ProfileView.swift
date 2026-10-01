@@ -10,6 +10,7 @@ struct ProfileView: View {
     @State private var loading = true
     @State private var showLogout = false
     @State private var unreadCount = 0
+    @State private var trafficDays = 15
 
     var body: some View {
         let palette = Palette(scheme: scheme)
@@ -21,7 +22,7 @@ struct ProfileView: View {
                 sessionCard(palette)
                 menuCard(palette)
 
-                AppButton(title: "退出登录", icon: "rectangle.portrait.and.arrow.right", style: .outline) {
+                AppButton(title: "退出登录", icon: "rectangle.portrait.and.arrow.right", style: .destructive) {
                     showLogout = true
                 }
                 .padding(.top, 4)
@@ -33,12 +34,17 @@ struct ProfileView: View {
                     .padding(.top, 4)
             }
             .padding(.horizontal, DS.Size.pagePadding)
-            .padding(.top, 12)
+            .padding(.top, 8)
             .padding(.bottom, 24)
         }
         .pageBackground()
+        .navigationTitle("我的")
+        .navigationBarTitleDisplayMode(.large)
         .task { await load() }
         .refreshable { await load() }
+        .onChange(of: trafficDays) { _ in
+            Task { await loadTraffic() }
+        }
         .alert("退出登录？", isPresented: $showLogout) {
             Button("取消", role: .cancel) {}
             Button("退出", role: .destructive) { app.logout() }
@@ -102,7 +108,16 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     IconTile(icon: "chart.bar.fill", color: DS.Traffic.barStrong)
-                    SectionHeader(title: "流量使用", subtitle: "近 15 天")
+                    SectionHeader(title: "流量使用", subtitle: "近 \(trafficDays) 天")
+                    Spacer()
+                    SegmentedTabs(
+                        items: ["近 7 天", "近 15 天"],
+                        selection: Binding(
+                            get: { trafficDays == 7 ? 0 : 1 },
+                            set: { trafficDays = $0 == 0 ? 7 : 15 }
+                        )
+                    )
+                    .frame(width: 150)
                 }
 
                 if let center {
@@ -220,7 +235,7 @@ struct ProfileView: View {
                 menuRow(palette, icon: "bitcoinsign.circle.fill", color: DS.IconColor.orange, title: "金币与邀请",
                         destination: AnyView(CoinsView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "bubble.left.and.text.bubble.right.fill", color: DS.IconColor.blue, title: "问题反馈",
+                menuRow(palette, icon: "exclamationmark.bubble.fill", color: DS.IconColor.blue, title: "问题反馈",
                         destination: AnyView(FeedbackView().environmentObject(app)))
                 divider(palette)
                 menuRow(palette, icon: "doc.text.fill", color: DS.IconColor.sky, title: "我的订单",
@@ -237,7 +252,7 @@ struct ProfileView: View {
         NavigationLink(destination: destination) {
             MenuRow(icon: icon, iconColor: color, title: title, subtitle: subtitle)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.98, haptic: true))
     }
 
     private func divider(_ palette: Palette) -> some View {
@@ -255,10 +270,15 @@ struct ProfileView: View {
             if APIError.from(error).isCancelled { return }
             app.report(error)
         }
-        traffic = try? await APIClient.shared.fetchTraffic(days: 15)
+        await loadTraffic()
         if let announcements = try? await APIClient.shared.fetchAnnouncements() {
             unreadCount = announcements.unreadCount
         }
+    }
+
+    /// 按当前选择（近 7 / 15 天）拉取流量统计
+    private func loadTraffic() async {
+        traffic = try? await APIClient.shared.fetchTraffic(days: trafficDays)
     }
 }
 
