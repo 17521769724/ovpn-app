@@ -19,7 +19,8 @@ enum LocalStore {
 }
 
 /// 令牌与凭据安全存储（Keychain）
-enum Keychain {
+/// 命名避免与 TunnelKit 的 `Keychain` 冲突
+enum SecureStore {
     private static let service = "com.ovpn.panel"
     static let tokenAccount = "app.token"
     /// 连接 VPN 用的账号密码（登录成功后保存，连接时自动使用）

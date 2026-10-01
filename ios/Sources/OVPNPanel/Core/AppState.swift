@@ -28,7 +28,7 @@ final class AppState: ObservableObject {
         if let saved = LocalStore.masterURL, !saved.isEmpty {
             masterURL = saved
             api.setBaseURL(saved)
-            if let token = Keychain.load(), !token.isEmpty {
+            if let token = SecureStore.load(), !token.isEmpty {
                 api.setToken(token)
                 phase = .main
                 Task { await refreshUser() }
@@ -87,7 +87,7 @@ final class AppState: ObservableObject {
         applyAuth(result)
         LocalStore.lastAccount = account
         // 保存连接 VPN 用的登录密码（OpenVPN 采用账号密码认证）
-        Keychain.save(password, account: Keychain.passwordAccount)
+        SecureStore.save(password, account: SecureStore.passwordAccount)
     }
 
     func register(username: String, password: String, email: String,
@@ -96,12 +96,12 @@ final class AppState: ObservableObject {
                                             captchaToken: captchaToken, captchaInput: captchaInput)
         applyAuth(result)
         LocalStore.lastAccount = username
-        Keychain.save(password, account: Keychain.passwordAccount)
+        SecureStore.save(password, account: SecureStore.passwordAccount)
     }
 
     private func applyAuth(_ result: AuthResult) {
         api.setToken(result.token)
-        Keychain.save(result.token)
+        SecureStore.save(result.token)
         user = result.user
         phase = .main
     }
@@ -119,7 +119,7 @@ final class AppState: ObservableObject {
 
     func logout() {
         api.setToken(nil)
-        Keychain.clear()
+        SecureStore.clear()
         user = nil
         phase = .auth
         dismissToast()

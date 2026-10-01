@@ -441,7 +441,7 @@ struct HomeView: View {
         }
         savingPassword = true
         defer { savingPassword = false }
-        Keychain.save(passwordInput, account: Keychain.passwordAccount)
+        SecureStore.save(passwordInput, account: SecureStore.passwordAccount)
         let password = passwordInput
         passwordInput = ""
         showPasswordSheet = false
@@ -485,7 +485,7 @@ struct HomeView: View {
         defer { connecting = false }
         do {
             let config = try await APIClient.shared.fetchLineConfig(lineId: line.id, nodeId: node.id)
-            let saved = Keychain.load(account: Keychain.passwordAccount) ?? ""
+            let saved = SecureStore.load(account: SecureStore.passwordAccount) ?? ""
             if saved.isEmpty {
                 pendingProfile = config
                 passwordInput = ""

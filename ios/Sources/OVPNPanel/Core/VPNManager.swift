@@ -4,7 +4,6 @@ import TunnelKit
 import TunnelKitOpenVPN
 
 /// VPN 连接管理：解析 .ovpn → 安装隧道配置 → 启动/停止 NetworkExtension 隧道
-@MainActor
 final class VPNManager: ObservableObject {
     static let shared = VPNManager()
 
@@ -17,8 +16,15 @@ final class VPNManager: ObservableObject {
     @Published private(set) var lastError: String?
 
     private var manager: NETunnelProviderManager?
+    private var observing = false
 
-    private init() {
+    private init() {}
+
+    /// 开始监听系统 VPN 状态变化（首次进入线路页时调用）
+    @MainActor
+    func startObserving() {
+        guard !observing else { return }
+        observing = true
         NotificationCenter.default.addObserver(
             forName: .NEVPNStatusDidChange,
             object: nil,
@@ -52,7 +58,9 @@ final class VPNManager: ObservableObject {
     // MARK: - 隧道管理
 
     /// 加载已存在的隧道配置（首次为 nil）
+    @MainActor
     func prepare() async {
+        startObserving()
         manager = try? await loadManager()
         syncStatus()
     }
@@ -74,6 +82,7 @@ final class VPNManager: ObservableObject {
     }
 
     /// 使用主控下发的 .ovpn 配置建立连接
+    @MainActor
     func connect(profile: LineConfig, username: String, password: String) async throws {
         lastError = nil
 
@@ -119,6 +128,7 @@ final class VPNManager: ObservableObject {
     }
 
     /// 断开连接（保留配置，便于下次快速连接）
+    @MainActor
     func disconnect() async {
         guard let manager else {
             await prepare()
