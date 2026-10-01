@@ -30,9 +30,8 @@ final class VPNManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.syncStatus()
-            }
+            // 观察者注册在 main queue，回调本身就在主线程
+            self?.syncStatus()
         }
     }
 
