@@ -2,6 +2,9 @@ name: OVPNPanel
 
 options:
   bundleIdPrefix: com.ovpn
+  # 构建机为 Xcode 15.4（macos-14），必须生成 Xcode 15 兼容的工程格式，
+  # 否则默认的 xcode16_0 格式会报 "future Xcode project file format (77)"
+  projectFormat: xcode15_3
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -22,6 +25,8 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Sources/OVPNPanel
+        excludes:
+          - "Info.plist"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ovpn.panel

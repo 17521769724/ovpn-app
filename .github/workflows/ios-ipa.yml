@@ -25,7 +25,9 @@ jobs:
 
       - name: 生成 Xcode 工程
         working-directory: ios
-        run: xcodegen generate
+        run: |
+          xcodegen generate
+          grep -m1 "objectVersion" OVPNPanel.xcodeproj/project.pbxproj || true
 
       - name: 构建 App（不签名）
         working-directory: ios
@@ -38,7 +40,7 @@ jobs:
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tail -80
+            build 2>&1 | tail -150
 
       - name: 打包为未签名 IPA（巨魔自签安装）
         working-directory: ios
