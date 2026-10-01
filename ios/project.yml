@@ -13,7 +13,9 @@ options:
 packages:
   TunnelKit:
     url: https://github.com/partout-io/tunnelkit
-    exactVersion: 6.3.2
+    # 固定到 v6.3.2 对应提交：TunnelKit 自身以 revision 依赖 wireguard-apple，
+    # SPM 规定根依赖也不能用稳定版本号，否则报 unstable-version 冲突
+    revision: f2c0fb079e2a318a4717d5fb8daa8f149174dadd
 
 settings:
   base:
