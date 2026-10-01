@@ -1,0 +1,10 @@
+# iOS
+ios/OVPNPanel.xcodeproj/
+ios/build/
+ios/Payload/
+ios/*.ipa
+ios/*.xcworkspace/
+.DS_Store
+
+# 通用
+*.log

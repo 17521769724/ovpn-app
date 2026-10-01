@@ -1,0 +1,62 @@
+name: ios-ipa
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-ipa.yml'
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 显示工具链版本
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成 Xcode 工程
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: 构建 App（不签名）
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project OVPNPanel.xcodeproj \
+            -scheme OVPNPanel \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tail -80
+
+      - name: 打包为未签名 IPA（巨魔自签安装）
+        working-directory: ios
+        run: |
+          set -e
+          APP="$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)"
+          if [ -z "$APP" ]; then echo "未找到 .app 产物"; exit 1; fi
+          echo "产物：$APP"
+          rm -rf Payload OVPNPanel-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry OVPNPanel-unsigned.ipa Payload
+          ls -lh OVPNPanel-unsigned.ipa
+          echo "IPA 打包完成"
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: OVPNPanel-ipa
+          path: ios/OVPNPanel-unsigned.ipa
+          retention-days: 30
