@@ -1,0 +1,14 @@
+name: ios-smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  smoke:
+    runs-on: macos-14
+    steps:
+      - name: 环境信息
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
