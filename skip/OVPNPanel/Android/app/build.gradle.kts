@@ -93,13 +93,12 @@ android {
 // 报错：Could not find com.ovpn.panel:OVPNPanel:。
 // 这里显式把该坐标替换为工程内同名模块（由 Skip 的 settings 插件 include 进来），
 // 与 `skip export` 生成的兜底插件所用的 project(":OVPNPanel") 写法一致。
+val hasTranspiledAppModule = findProject(":OVPNPanel") != null
+
 configurations.configureEach {
     resolutionStrategy.dependencySubstitution {
-        val moduleProject = findProject(":OVPNPanel")
-        if (moduleProject != null) {
-            substitute(module("com.ovpn.panel:OVPNPanel")).using(moduleProject)
-        } else {
-            logger.warn("w: 未找到 :OVPNPanel 工程，无法替换 com.ovpn.panel:OVPNPanel 依赖")
+        if (hasTranspiledAppModule) {
+            substitute(module("com.ovpn.panel:OVPNPanel")).using(project(":OVPNPanel"))
         }
     }
 }
