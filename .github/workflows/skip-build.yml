@@ -79,6 +79,17 @@ jobs:
           fi
           echo "转译自检通过（Android 侧无不受支持的 API）"
 
+      # 参考用：直接以 iOS 目标编译共享模块，便于把编译错误完整打印出来
+      # （xcodebuild 里 skipstone 插件的报错会被吞掉，只显示 "Validate plug-in ... failed"）
+      - name: iOS 模块编译自检（仅提示）
+        continue-on-error: true
+        working-directory: ${{ env.SKIP_APP_DIR }}
+        run: |
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          swift build --triple arm64-apple-ios16.0 --sdk "$SDK" 2>&1 | tee /tmp/ioscheck.log | tail -5 || true
+          echo "=== iOS 模块编译错误 ==="
+          grep -E "error:" /tmp/ioscheck.log | sort -u | head -40 || echo "(无 error)"
+
       - name: 构建 App（不签名）
         working-directory: ${{ env.SKIP_APP_DIR }}/Darwin
         run: |
@@ -203,7 +214,8 @@ jobs:
         working-directory: ${{ env.SKIP_APP_DIR }}/Android
         run: |
           if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.9
+            # Skip 生成的工程要求 Gradle 9.4.1+（AGP 版本校验）
+            gradle wrapper --gradle-version 9.4.1
           fi
           chmod +x gradlew
 
@@ -241,3 +253,5 @@ jobs:
         run: |
           echo "=== Gradle 错误 ==="
           grep -E "^e: |error:|FAILURE|What went wrong|Caused by" /tmp/gradle.log | head -40 || true
+          echo "=== Swift 编译错误上下文 ==="
+          grep -n -B2 -A6 "no such module\|error: " /tmp/gradle.log | head -80 || true

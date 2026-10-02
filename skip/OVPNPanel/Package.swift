@@ -21,6 +21,10 @@ let package = Package(
         .package(url: "https://github.com/skiptools/skip-model.git", from: "1.8.0"),
         // Skip 工具链（提供 skipstone 转译插件）
         .package(url: "https://github.com/skiptools/skip.git", from: "1.9.13"),
+        // iOS 侧隧道内核（与 Darwin 工程使用的 fork 版本保持一致）。
+        // 仅在 iOS 平台参与构建：Android 侧走 Kotlin VpnBridge，不引用该依赖。
+        .package(url: "https://github.com/17521769724/tunnelkit",
+                 revision: "db03b9d5af783c40738a187cce3612c4259b2b3a"),
     ],
     targets: [
         .target(
@@ -29,6 +33,9 @@ let package = Package(
                 .product(name: "SkipUI", package: "skip-ui"),
                 .product(name: "SkipFoundation", package: "skip-foundation"),
                 .product(name: "SkipModel", package: "skip-model"),
+                // Darwin（iOS）侧 VPNManager 需要，Android 端由 #if SKIP 分支剥离
+                .product(name: "TunnelKit", package: "TunnelKit", condition: .when(platforms: [.iOS])),
+                .product(name: "TunnelKitOpenVPN", package: "TunnelKit", condition: .when(platforms: [.iOS])),
             ],
             resources: [.process("Resources")],
             plugins: [.plugin(name: "skipstone", package: "skip")]
