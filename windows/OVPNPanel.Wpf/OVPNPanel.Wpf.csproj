@@ -31,7 +31,6 @@
 
   <ItemGroup>
     <!-- 全部为 .NET Framework 自带程序集：最终产物是单一 EXE，无需随附 DLL -->
-    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Security" />
   </ItemGroup>
