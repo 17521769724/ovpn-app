@@ -4,11 +4,16 @@
 仅供自动化 UI 截图使用，不参与正式部署。
 """
 import json
+import os
 import re
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timedelta, timezone
 
 PORT = 8788
+# 人为延迟（毫秒）：用于截取「数据加载中」的界面，验证加载前后布局是否一致（无跳动）。
+# 登录接口不延迟，保证自动登录后能尽快进入主界面。
+DELAY_MS = int(os.environ.get("MOCK_DELAY_MS", "0"))
 TZ = timezone(timedelta(hours=8))
 
 
@@ -214,6 +219,8 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         if length:
             self.rfile.read(length)
+        if DELAY_MS > 0 and not parsed.path.startswith("/api/v1/auth/"):
+            time.sleep(DELAY_MS / 1000.0)
         data = payload_for(parsed.path, parsed.query)
         if data is None:
             self._send({"code": 404, "message": "not found", "data": None})

@@ -58,8 +58,9 @@ jobs:
           echo "使用模拟器: $DEVICE"
           xcrun simctl boot "$DEVICE" || true
           xcrun simctl bootstatus "$DEVICE" -b
-          APP="$(find build-sim/Build/Products -maxdepth 1 -name '*.app' | head -1)"
+          APP="$(find build-sim/Build/Products -maxdepth 3 -name 'OVPN.app' -type d | head -1)"
           echo "安装: $APP"
+          test -n "$APP"
           xcrun simctl install "$DEVICE" "$APP"
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           echo "BUNDLE_ID=com.ovpn.panel" >> "$GITHUB_ENV"
@@ -70,7 +71,7 @@ jobs:
           sleep 2
           curl -sf http://127.0.0.1:8788/api/v1/lines > /dev/null && echo "模拟主控就绪"
 
-      - name: 截图各页面
+      - name: 截图各页面（常规）
         run: |
           set -e
           mkdir -p shots
@@ -79,9 +80,8 @@ jobs:
           xcrun simctl launch "$DEVICE" "$BUNDLE_ID" > /dev/null
           sleep 5
           xcrun simctl io "$DEVICE" screenshot shots/00-setup.png
-          xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" || true
 
-          # 2) 连接模拟主控并自动登录，逐个 Tab 截图
+          # 2) 连接模拟主控并自动登录，逐个 Tab 截图（每个 Tab 关闭后重开，保证独立）
           for tab in 0 1 2 3; do
             xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" 2>/dev/null || true
             xcrun simctl launch "$DEVICE" "$BUNDLE_ID" \
@@ -89,10 +89,40 @@ jobs:
               -autoLogin demo:demo \
               -startTab "$tab" > /dev/null
             sleep 8
-            xcrun simctl io "$DEVICE" screenshot "shots/1${tab}-tab${tab}.png"
+            xcrun simctl io "$DEVICE" screenshot "shots/10-tab${tab}.png"
           done
+          xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" 2>/dev/null || true
 
-          # 3) 我的页面：切换「近15天」后的状态（借助第二张截图时已加载完成，这里再补一张长图）
+          # 3) 桌面截图：核对 App 图标（新扁平闪电图标）
+          sleep 3
+          xcrun simctl io "$DEVICE" screenshot shots/20-home-icon.png
+
+          ls -lh shots
+
+      - name: 重启模拟主控（带响应延迟）
+        run: |
+          pkill -f mock_master.py || true
+          sleep 1
+          MOCK_DELAY_MS=5000 python3 .github/ui-check/mock_master.py > /tmp/mock.log 2>&1 &
+          sleep 2
+          curl -sf http://127.0.0.1:8788/api/v1/lines > /dev/null && echo "模拟主控就绪（延迟 5s）"
+
+      - name: 截图：加载中 vs 加载完成（邀请 / 我的）
+        run: |
+          set -e
+          # 登录接口不延迟：约 1s 进入主界面，各页面数据 5s 后才返回。
+          # 通过对比「数据未就绪」与「数据就绪」两张截图，验证页面无布局跳动。
+          for tab in 2 3; do
+            xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" 2>/dev/null || true
+            xcrun simctl launch "$DEVICE" "$BUNDLE_ID" \
+              -masterURL http://127.0.0.1:8788 \
+              -autoLogin demo:demo \
+              -startTab "$tab" > /dev/null
+            sleep 2.5
+            xcrun simctl io "$DEVICE" screenshot "shots/30-tab${tab}-loading.png"
+            sleep 10
+            xcrun simctl io "$DEVICE" screenshot "shots/31-tab${tab}-loaded.png"
+          done
           ls -lh shots
 
       - name: 上传截图产物
