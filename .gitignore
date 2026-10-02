@@ -9,6 +9,12 @@ ios/*.xcworkspace/
 # 通用
 *.log
 
+# Windows 客户端（WPF）构建产物
+windows/OVPNPanel.Wpf/obj/
+windows/OVPNPanel.Wpf/bin/
+windows/OVPNPanel.Wpf/out*/
+windows/**/*.user
+
 # Android（改造前的 Kotlin 版）构建产物：体积大，不入库
 android/build/
 android/app/build/

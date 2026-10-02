@@ -1,0 +1,80 @@
+name: windows-exe
+
+# Windows 客户端（WPF / .NET Framework 4.6.2，兼容 Win7 ~ Win11）构建与界面自检。
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows-exe.yml'
+
+env:
+  PROJ: windows/OVPNPanel.Wpf/OVPNPanel.Wpf.csproj
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 构建界面自检版（asInvoker，免 UAC）
+        run: dotnet build "$env:PROJ" -c Release -p:CiSmoke=true -o out/smoke
+
+      - name: 启动并截图（四个 Tab）
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          $exe = (Resolve-Path "out/smoke/OVPNPanel.exe").Path
+          for ($tab = 0; $tab -le 3; $tab++) {
+            $p = Start-Process -FilePath $exe -ArgumentList "-demo","-startTab","$tab","-winSize","430,700","-theme","light" -PassThru
+            Start-Sleep -Seconds 6
+            if ($p.HasExited) { throw "Tab $tab 启动即退出，exit=$($p.ExitCode)" }
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bmp.Save("$PWD/win-tab$tab.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+            Write-Host "tab $tab ok, alive=$(-not $p.HasExited)"
+            $p | Stop-Process -Force
+            Start-Sleep -Seconds 1
+          }
+          Get-ChildItem win-tab*.png | Format-Table Name, Length
+
+      - name: 构建 Release（requireAdministrator 正式版）
+        run: dotnet build "$env:PROJ" -c Release -t:Rebuild -o out/release
+
+      - name: 校验产物
+        shell: pwsh
+        run: |
+          Get-ChildItem out/release | Format-Table Name, Length
+          $exe = "out/release/OVPNPanel.exe"
+          if (!(Test-Path $exe)) { throw "未生成 OVPNPanel.exe" }
+          (Get-Item $exe).VersionInfo | Format-List FileVersion, ProductName
+
+      - name: 上传 EXE 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: OVPNPanel-windows
+          path: |
+            out/release/OVPNPanel.exe
+            out/release/OVPNPanel.exe.config
+          retention-days: 30
+
+      - name: 上传界面截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OVPNPanel-windows-screenshots
+          path: win-tab*.png
+          if-no-files-found: warn
+          retention-days: 14

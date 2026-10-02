@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- .NET Framework 4.6.2：Win7 SP1 及以上均可运行，Win10/11 自带 4.8 运行时 -->
+    <TargetFramework>net462</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>OVPNPanel</RootNamespace>
+    <AssemblyName>OVPNPanel</AssemblyName>
+    <Version>1.2.6</Version>
+    <AssemblyVersion>1.2.6.0</AssemblyVersion>
+    <FileVersion>1.2.6.0</FileVersion>
+    <LangVersion>7.3</LangVersion>
+    <StartupObject>OVPNPanel.Program</StartupObject>
+    <!-- 正式交付：requireAdministrator（建立隧道需创建虚拟网卡）；CI 截图：asInvoker -->
+    <ApplicationManifest Condition="'$(CiSmoke)' != 'true'">app.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="'$(CiSmoke)' == 'true'">app.ci.manifest</ApplicationManifest>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>OVPN 面板</Product>
+    <Company>OVPN</Company>
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 全部为 .NET Framework 自带程序集：最终产物是单一 EXE，无需随附 DLL -->
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+  </ItemGroup>
+
+</Project>
