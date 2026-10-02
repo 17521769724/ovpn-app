@@ -4,6 +4,7 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var vpn = VPNManager.shared
 
     @State private var center: UserCenterPayload?
     @State private var traffic: TrafficPayload?
@@ -11,6 +12,7 @@ struct ProfileView: View {
     @State private var showLogout = false
     @State private var unreadCount = 0
     @State private var trafficDays = 15
+    @State private var closingSessions = false
 
     var body: some View {
         let palette = Palette(scheme: scheme)
@@ -284,6 +286,30 @@ struct ProfileView: View {
                             Divider().overlay(palette.border)
                         }
                     }
+
+                    // 本机未连接时，这些会话多半是系统「设置」中断开留下的残留记录，
+                    // 提供手动兜底清理（主控会同时通知节点释放服务端连接）
+                    if !vpn.isConnected {
+                        Divider().overlay(palette.border)
+                        HStack {
+                            Text("断开其它设备 / 清理残留会话")
+                                .font(DS.Font.caption)
+                                .foregroundStyle(palette.mutedForeground)
+                            Spacer()
+                            AppButton(
+                                title: "全部断开",
+                                icon: "xmark.circle",
+                                style: .secondary,
+                                height: DS.Size.buttonHeightSmall,
+                                loading: closingSessions,
+                                disabled: closingSessions
+                            ) {
+                                Task { await closeAllSessions() }
+                            }
+                            .frame(width: 108)
+                        }
+                        .padding(.top, 8)
+                    }
                 }
             }
         }
@@ -352,6 +378,20 @@ struct ProfileView: View {
         guard let value = try? await APIClient.shared.fetchTraffic(days: days) else { return }
         guard days == trafficDays else { return }
         traffic = value
+    }
+
+    /// 手动关闭该账号在主控侧的全部在线会话（含系统「设置」断开后残留的记录）
+    private func closeAllSessions() async {
+        guard !closingSessions else { return }
+        closingSessions = true
+        defer { closingSessions = false }
+        do {
+            try await APIClient.shared.closeSessions()
+            app.showToast("已断开全部在线会话")
+        } catch {
+            app.report(error)
+        }
+        await load()
     }
 }
 
