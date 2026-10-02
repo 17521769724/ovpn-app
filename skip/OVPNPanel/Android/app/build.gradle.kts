@@ -88,6 +88,22 @@ android {
     }
 }
 
+// skip-build-plugin 会自动注入依赖 "com.ovpn.panel:OVPNPanel"（不带版本号），
+// 期望由 includeBuild 的默认替换指向本地转译模块。实际构建中该替换未生效，
+// 报错：Could not find com.ovpn.panel:OVPNPanel:。
+// 这里显式把该坐标替换为工程内同名模块（由 Skip 的 settings 插件 include 进来），
+// 与 `skip export` 生成的兜底插件所用的 project(":OVPNPanel") 写法一致。
+configurations.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        val moduleProject = findProject(":OVPNPanel")
+        if (moduleProject != null) {
+            substitute(module("com.ovpn.panel:OVPNPanel")).using(moduleProject)
+        } else {
+            logger.warn("w: 未找到 :OVPNPanel 工程，无法替换 com.ovpn.panel:OVPNPanel 依赖")
+        }
+    }
+}
+
 dependencies {
     // OpenVPN 3 内核：与改造前 Android 版完全一致，保证 VPN 行为不变
     implementation("io.github.tim06:openvpn:1.1.3")

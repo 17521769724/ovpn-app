@@ -231,17 +231,30 @@ jobs:
           fi
           chmod +x gradlew
 
+      - name: 排障：输出 Skip 生成的 Gradle 工程结构
+        working-directory: ${{ env.SKIP_APP_DIR }}
+        run: |
+          echo "=== 生成的 settings.gradle.kts ==="
+          find .build/plugins/outputs -path "*skipstone/settings.gradle.kts" | while read -r f; do
+            echo "--- $f"; cat "$f"
+          done
+          echo "=== 生成的 OVPNPanel/build.gradle.kts ==="
+          f="$(find .build/plugins/outputs -path "*skipstone/OVPNPanel/build.gradle.kts" | head -1)"
+          if [ -n "$f" ]; then cat "$f"; else echo "(未找到)"; fi
+
       - name: 构建 Debug APK
         working-directory: ${{ env.SKIP_APP_DIR }}/Android
         run: |
           set -o pipefail
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log | tail -60
+          # 与 Skip 官方模板一致：使用系统 gradle（官方 skip-app 工作流走 Homebrew gradle），
+          # 避免 wrapper 版本与 Skip 生成的工程不匹配。
+          gradle projects :app:assembleDebug --no-daemon --stacktrace --warning-mode none 2>&1 | tee /tmp/gradle.log | tail -80
 
       - name: 构建 Release APK（debug 签名，可直接侧载）
         working-directory: ${{ env.SKIP_APP_DIR }}/Android
         run: |
           set -o pipefail
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee -a /tmp/gradle.log | tail -60
+          gradle :app:assembleRelease --no-daemon --stacktrace --warning-mode none 2>&1 | tee -a /tmp/gradle.log | tail -60
 
       - name: 校验 APK 信息
         working-directory: ${{ env.SKIP_APP_DIR }}/Android
