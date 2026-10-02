@@ -42,7 +42,7 @@ jobs:
         run: |
           dotnet build "windows/OVPNPanel.Wpf/OVPNPanel.Wpf.csproj" -c Release -p:CiSmoke=true -o out/smoke
           $exe = (Resolve-Path "out/smoke/OVPNPanel.exe").Path
-          $common = @("-masterURL","http://127.0.0.1:8788","-autoLogin","demo:demo","-winSize","430,760","-theme","light","-shotDelay","6000")
+          $common = @("-masterURL","http://127.0.0.1:8788","-autoLogin","demo:demo","-noProxy","-winSize","430,760","-theme","light","-shotDelay","6000")
           $shots = @(
             @{ n = "setup"; a = @("-winSize","430,760","-theme","light","-shotDelay","2500") },
             @{ n = "tab0";  a = ($common + @("-startTab","0")) },

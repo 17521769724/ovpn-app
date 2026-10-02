@@ -26,7 +26,14 @@ namespace OVPNPanel.Core
         {
             if (error is ApiException) return (ApiException)error;
             if (error is TaskCanceledException || error is OperationCanceledException) return Cancelled();
-            return new ApiException("无法连接主控：" + error.Message);
+            var message = "无法连接主控：" + error.Message;
+            var inner = error.InnerException;
+            while (inner != null)
+            {
+                if (!string.IsNullOrEmpty(inner.Message)) message += "（" + inner.Message + "）";
+                inner = inner.InnerException;
+            }
+            return new ApiException(message);
         }
     }
 
@@ -52,6 +59,33 @@ namespace OVPNPanel.Core
             {
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
             };
+            // 本地回环地址始终直连（企业代理 / CI 环境下的系统代理不应拦截 127.0.0.1）
+            try
+            {
+                if (LaunchArgs.Value("-noProxy") != null)
+                {
+                    handler.UseProxy = false;
+                }
+                else
+                {
+                    var systemProxy = WebRequest.DefaultWebProxy as WebProxy;
+                    if (systemProxy != null)
+                    {
+                        var proxy = new WebProxy(systemProxy.Address)
+                        {
+                            BypassProxyOnLocal = true,
+                            BypassList = new[]
+                            {
+                                "127.0.0.1", "localhost", "::1",
+                                "http://127.0.0.1", "http://localhost",
+                            },
+                        };
+                        handler.Proxy = proxy;
+                        handler.UseProxy = true;
+                    }
+                }
+            }
+            catch { }
             var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(40) };
             return client;
         }
