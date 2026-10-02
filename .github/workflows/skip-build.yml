@@ -17,11 +17,22 @@ env:
 jobs:
   # ---------------------------------------------------------------- iOS IPA
   ios-ipa:
-    runs-on: macos-14
+    # Skip 需要 Swift 6.1+（Xcode 16 起），macos-14 只有 Swift 5.10，故用 macos-15
+    runs-on: macos-15
     timeout-minutes: 90
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
+
+      - name: 选择 Xcode（确保 Swift 6.1+）
+        run: |
+          swift --version || true
+          if ! swift --version 2>/dev/null | grep -qE "Swift version 6\.[1-9]"; then
+            for x in $(ls -d /Applications/Xcode*.app 2>/dev/null | sort -Vr); do
+              sudo xcode-select -s "$x"
+              if swift --version 2>/dev/null | grep -qE "Swift version 6\.[1-9]"; then break; fi
+            done
+          fi
 
       - name: 显示工具链版本
         run: |
@@ -120,11 +131,22 @@ jobs:
 
   # --------------------------------------------------------------- Android APK
   android-apk:
-    runs-on: macos-14
+    # 同上：Skip 工具链需要 Swift 6.1+（Skip 的 Gradle 预构建会调用 swift 解析包）
+    runs-on: macos-15
     timeout-minutes: 120
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
+
+      - name: 选择 Xcode（确保 Swift 6.1+）
+        run: |
+          swift --version || true
+          if ! swift --version 2>/dev/null | grep -qE "Swift version 6\.[1-9]"; then
+            for x in $(ls -d /Applications/Xcode*.app 2>/dev/null | sort -Vr); do
+              sudo xcode-select -s "$x"
+              if swift --version 2>/dev/null | grep -qE "Swift version 6\.[1-9]"; then break; fi
+            done
+          fi
 
       - name: 显示工具链版本
         run: |
