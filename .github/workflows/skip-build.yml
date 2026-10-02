@@ -79,16 +79,17 @@ jobs:
           fi
           echo "转译自检通过（Android 侧无不受支持的 API）"
 
-      # 参考用：直接以 iOS 目标编译共享模块，便于把编译错误完整打印出来
+      # 直接以 iOS 目标编译共享模块，把编译错误完整打印出来
       # （xcodebuild 里 skipstone 插件的报错会被吞掉，只显示 "Validate plug-in ... failed"）
-      - name: iOS 模块编译自检（仅提示）
-        continue-on-error: true
+      - name: iOS 模块编译自检
         working-directory: ${{ env.SKIP_APP_DIR }}
         run: |
           SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-          swift build --triple arm64-apple-ios16.0 --sdk "$SDK" 2>&1 | tee /tmp/ioscheck.log | tail -5 || true
+          STATUS=0
+          swift build --triple arm64-apple-ios16.0 --sdk "$SDK" 2>&1 | tee /tmp/ioscheck.log | tail -5 || STATUS=$?
           echo "=== iOS 模块编译错误 ==="
           grep -E "error:" /tmp/ioscheck.log | sort -u | head -40 || echo "(无 error)"
+          exit $STATUS
 
       - name: 构建 App（不签名）
         working-directory: ${{ env.SKIP_APP_DIR }}/Darwin

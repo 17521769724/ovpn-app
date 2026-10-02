@@ -38,6 +38,10 @@ let package = Package(
                 .product(name: "TunnelKitOpenVPN", package: "TunnelKit", condition: .when(platforms: [.iOS])),
             ],
             resources: [.process("Resources")],
+            // 与 Darwin 工程保持一致（SWIFT_VERSION 5.0）：
+            // 否则 swift-tools-version 6.x 会默认启用 Swift 6 严格并发检查，
+            // 导致 UIKit / NetworkExtension / 单例等既有写法被判定为编译错误。
+            swiftSettings: [.swiftLanguageMode(.v5)],
             plugins: [.plugin(name: "skipstone", package: "skip")]
         ),
     ]
