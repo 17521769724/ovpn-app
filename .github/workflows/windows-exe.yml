@@ -25,32 +25,40 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: 构建界面自检版（asInvoker，免 UAC）
-        run: dotnet build "$env:PROJ" -c Release -p:CiSmoke=true -o out/smoke
+      - name: 启动模拟主控
+        shell: pwsh
+        run: |
+          $mock = Start-Process -FilePath "python" -ArgumentList ".github/ui-check/mock_master.py" -PassThru -RedirectStandardOutput mock.log -RedirectStandardError mock.err.log
+          for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 500
+            try { Invoke-WebRequest -Uri "http://127.0.0.1:8788/api/v1/lines" -UseBasicParsing -TimeoutSec 2 | Out-Null; Write-Host "mock 就绪"; break }
+            catch { }
+          }
+          Get-Content mock.log -ErrorAction SilentlyContinue | Write-Host
 
-      - name: 启动并截图（窗口自渲染）
+      - name: 构建并截图（窗口自渲染）
         continue-on-error: true
         shell: pwsh
         run: |
+          dotnet build "windows/OVPNPanel.Wpf/OVPNPanel.Wpf.csproj" -c Release -p:CiSmoke=true -o out/smoke
           $exe = (Resolve-Path "out/smoke/OVPNPanel.exe").Path
+          $common = @("-masterURL","http://127.0.0.1:8788","-autoLogin","demo:demo","-winSize","430,760","-theme","light","-shotDelay","6000")
           $shots = @(
-            @{ n = "setup"; a = @("-winSize","430,700","-theme","light") },
-            @{ n = "tab0";  a = @("-demo","-startTab","0","-winSize","430,700","-theme","light") },
-            @{ n = "tab1";  a = @("-demo","-startTab","1","-winSize","430,700","-theme","light") },
-            @{ n = "tab2";  a = @("-demo","-startTab","2","-winSize","430,700","-theme","light") },
-            @{ n = "tab3";  a = @("-demo","-startTab","3","-winSize","430,700","-theme","light") }
+            @{ n = "setup"; a = @("-winSize","430,760","-theme","light","-shotDelay","2500") },
+            @{ n = "tab0";  a = ($common + @("-startTab","0")) },
+            @{ n = "tab1";  a = ($common + @("-startTab","1")) },
+            @{ n = "tab2";  a = ($common + @("-startTab","2")) },
+            @{ n = "tab3";  a = ($common + @("-startTab","3")) }
           )
           foreach ($s in $shots) {
             $out = (Join-Path $PWD ("win-" + $s.n + ".png"))
             $p = Start-Process -FilePath $exe -ArgumentList ($s.a + @("-shot", $out)) -PassThru
-            if (!$p.WaitForExit(30000)) {
+            if (!$p.WaitForExit(40000)) {
               Write-Host "[$($s.n)] 超时未退出，强制结束"
               $p | Stop-Process -Force
             }
             if (!(Test-Path $out)) { throw "[$($s.n)] 未生成截图 $out" }
             Write-Host "[$($s.n)] ok exit=$($p.ExitCode) size=$((Get-Item $out).Length)"
-            $trace = "out/smoke/trace.log"
-            if (Test-Path $trace) { Get-Content $trace -Tail 3 | Write-Host }
           }
           Get-ChildItem win-*.png | Format-Table Name, Length
 

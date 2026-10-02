@@ -104,13 +104,15 @@ namespace OVPNPanel.Core
         void Notify(string name)
         {
             var handler = PropertyChanged;
-            if (handler != null) handler(this, new PropertyChangedEventArgs(name));
+            if (handler != null) Ui.Post(() => handler(this, new PropertyChangedEventArgs(name)));
         }
 
         void Raise()
         {
+            // 状态可能在后台线程更新（轮询 / 刷新用户信息），
+            // 订阅者会据此重建 WPF 界面，因此必须切回 UI 线程再通知。
             var handler = StateChanged;
-            if (handler != null) handler();
+            if (handler != null) Ui.Post(handler);
         }
 
         // MARK: - 启动恢复

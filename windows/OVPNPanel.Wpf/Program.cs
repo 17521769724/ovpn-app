@@ -118,9 +118,12 @@ namespace OVPNPanel
             base.OnContentRendered(e);
             var shot = LaunchArgs.Value("-shot");
             if (string.IsNullOrEmpty(shot)) return;
+            int delay = 2000;
+            int parsed;
+            if (int.TryParse(LaunchArgs.Value("-shotDelay"), out parsed) && parsed > 0) delay = parsed;
             var timer = new System.Windows.Threading.DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(2000),
+                Interval = TimeSpan.FromMilliseconds(delay),
             };
             timer.Tick += (s, args) =>
             {
