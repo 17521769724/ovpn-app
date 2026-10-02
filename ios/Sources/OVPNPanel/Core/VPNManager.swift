@@ -83,15 +83,18 @@ final class VPNManager: ObservableObject {
             return
         }
         status = manager.connection.status
-        // 页面重建后从隧道配置恢复服务器 / 线路名称（标题格式：服务器 · 线路）
+        // 页面重建后从隧道配置恢复服务器 / 线路名称（标题格式：服务器 ｜ 线路）
         if activeServerName.isEmpty, let title = manager.localizedDescription {
             applyTitle(title)
         }
     }
 
-    /// 解析 "服务器 · 线路" 标题
+    /// 解析「服务器 ｜ 线路」标题（兼容旧版本的 " · " 分隔）
     private func applyTitle(_ title: String) {
-        let parts = title.components(separatedBy: " · ")
+        var parts = title.components(separatedBy: " ｜ ")
+        if parts.count < 2 {
+            parts = title.components(separatedBy: " · ")
+        }
         activeServerName = parts.first ?? title
         activeLineName = parts.count > 1 ? parts[1] : ""
     }
@@ -106,7 +109,7 @@ final class VPNManager: ObservableObject {
         let builder = parsed.configuration.builder()
 
         // 2) 组装隧道配置（凭据：用户名 + 钥匙串密码引用）
-        let title = "\(profile.nodeName) · \(profile.lineName)"
+        let title = "\(profile.nodeName) ｜ \(profile.lineName)"
         activeServerName = profile.nodeName
         activeLineName = profile.lineName
         activeNodeId = profile.nodeId

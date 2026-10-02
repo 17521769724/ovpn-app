@@ -120,11 +120,11 @@ struct LoginView: View {
                     }
                 }
 
-                HStack(spacing: 16) {
+                HStack(spacing: 14) {
                     Button("注册新账号") { showRegister = true }
-                    Text("·").foregroundStyle(palette.mutedForeground)
+                    VLine(height: 10)
                     Button("找回密码") { showForgot = true }
-                    Text("·").foregroundStyle(palette.mutedForeground)
+                    VLine(height: 10)
                     Button("更换主控") { showMasterSheet = true }
                 }
                 .font(DS.Font.bodySmall)

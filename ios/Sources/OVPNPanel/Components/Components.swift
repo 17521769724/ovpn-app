@@ -182,7 +182,22 @@ struct ChipButton: View {
     }
 }
 
+/// 竖线分隔符（全局替代 "·" 点分割）
+struct VLine: View {
+    var height: CGFloat = 10
+    var color: Color?
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Rectangle()
+            .fill(color ?? Palette(scheme: scheme).mutedForeground.opacity(0.38))
+            .frame(width: 1, height: height)
+    }
+}
+
 /// 分段切换（流量 近 7 天 / 近 15 天）
+/// 采用内容自适应宽度 + fixedSize，保证「近15天」等较长文案完整显示不被截断
 struct SegmentedTabs: View {
     let items: [String]
     @Binding var selection: Int
@@ -198,10 +213,9 @@ struct SegmentedTabs: View {
                 } label: {
                     Text(item)
                         .font(.system(size: 12, weight: selection == index ? .semibold : .regular))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 28)
+                        .fixedSize()
+                        .padding(.horizontal, 11)
+                        .frame(height: 26)
                         .foregroundStyle(selection == index ? palette.primary : palette.mutedForeground)
                         .background(
                             Group {
@@ -510,6 +524,7 @@ struct ToastCard: View {
 }
 
 /// 顶部横幅宿主：负责展示与自动消失
+/// 入场使用轻微缩放 + 淡入（不做位移），避免出现「文字先到、图标随后滑落」的渲染瑕疵
 struct ToastHost: View {
     @EnvironmentObject private var app: AppState
 
@@ -519,12 +534,17 @@ struct ToastHost: View {
                 ToastCard(message: toast)
                     .padding(.horizontal, DS.Size.pagePadding)
                     .padding(.top, 6)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.97, anchor: .top).combined(with: .opacity),
+                            removal: .opacity
+                        )
+                    )
                     .onTapGesture { app.dismissToast() }
             }
             Spacer()
         }
-        .animation(.spring(response: 0.34, dampingFraction: 0.84), value: app.toast)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: app.toast)
         .allowsHitTesting(app.toast != nil)
     }
 }

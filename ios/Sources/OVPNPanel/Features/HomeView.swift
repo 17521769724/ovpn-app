@@ -28,6 +28,13 @@ struct HomeView: View {
     @State private var connectedSince: Date?
     @State private var lastSample: (rx: Int64, tx: Int64, at: Date)?
     @State private var statsTask: Task<Void, Never>?
+    /// 每秒心跳：驱动连接时长计时的刷新
+    @State private var nowTick = Date()
+
+    /// 服务器列表「实时」数据自动刷新（带宽 / 负载 / 在线数）
+    private let liveTicker = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
+    /// 计时心跳（1 秒）
+    private let clockTicker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     // 输入一次密码后保存到钥匙串，后续连接自动使用
     @State private var passwordInput = ""
@@ -92,6 +99,15 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showPasswordSheet) { passwordSheet(palette) }
         .onChange(of: vpn.status) { status in handleStatusChange(status) }
+        // 服务器列表自动刷新：让「实时带宽 / 负载」真的保持实时（不打断已选线路）
+        .onReceive(liveTicker) { _ in
+            guard !connectionActive, !loading, payload != nil else { return }
+            Task { await load() }
+        }
+        // 每秒心跳：仅连接状态页需要驱动计时
+        .onReceive(clockTicker) { value in
+            if connectedSince != nil { nowTick = value }
+        }
         .onDisappear { stopStats() }
     }
 
@@ -108,7 +124,7 @@ struct HomeView: View {
                             BannerBar(message: payload.quota.reason.isEmpty ? "订阅状态异常，暂时无法连接" : payload.quota.reason)
                         } else {
                             BannerBar(
-                                message: "订阅正常 · 限速 \(Format.speed(payload.speedLimitKbps)) · 设备上限 \(payload.deviceLimit > 0 ? "\(payload.deviceLimit) 台" : "不限")",
+                                message: "订阅正常｜限速 \(Format.speed(payload.speedLimitKbps))｜设备上限 \(payload.deviceLimit > 0 ? "\(payload.deviceLimit) 台" : "不限")",
                                 kind: .success
                             )
                         }
@@ -140,7 +156,11 @@ struct HomeView: View {
             Image(systemName: showingServerPicker ? "1.circle.fill" : "2.circle.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(palette.primary)
-            Text(showingServerPicker ? "第 1 步 · 选择服务器" : "第 2 步 · 选择线路并连接")
+            Text(showingServerPicker ? "第 1 步" : "第 2 步")
+                .font(DS.Font.caption)
+                .foregroundStyle(palette.mutedForeground)
+            VLine(height: 10)
+            Text(showingServerPicker ? "选择服务器" : "选择线路并连接")
                 .font(DS.Font.caption)
                 .foregroundStyle(palette.mutedForeground)
             Spacer()
@@ -156,8 +176,8 @@ struct HomeView: View {
     private func connectionPage(_ palette: Palette) -> some View {
         ScrollView {
             VStack(spacing: 18) {
-                ConnectRing(status: vpn.status, palette: palette)
-                    .frame(width: 216, height: 216)
+                ConnectRing(status: vpn.status, palette: palette, duration: durationText)
+                    .frame(width: 224, height: 224)
                     .padding(.top, 12)
 
                 // 实时网速 + 本次会话流量
@@ -236,13 +256,16 @@ struct HomeView: View {
                     .font(.system(size: 18, weight: .semibold).monospacedDigit())
                     .foregroundStyle(palette.foreground)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                HStack(spacing: 4) {
-                    Image(systemName: "clock").font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(DS.IconColor.cyan)
-                    Text(durationText)
-                        .font(.system(size: 15, weight: .medium).monospacedDigit())
-                        .foregroundStyle(palette.secondaryText)
+                HStack(spacing: 6) {
+                    Text("↑ \(Format.bytes(sessionRx))")
+                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .foregroundStyle(DS.IconColor.green)
+                    VLine(height: 9)
+                    Text("↓ \(Format.bytes(sessionTx))")
+                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .foregroundStyle(DS.IconColor.teal)
                 }
+                .lineLimit(1).minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -292,7 +315,7 @@ struct HomeView: View {
 
     private var durationText: String {
         guard let connectedSince else { return "--:--" }
-        let seconds = max(0, Int(Date().timeIntervalSince(connectedSince)))
+        let seconds = max(0, Int(nowTick.timeIntervalSince(connectedSince)))
         let h = seconds / 3600
         let m = (seconds % 3600) / 60
         let s = seconds % 60
@@ -355,18 +378,32 @@ struct HomeView: View {
                                 if node.dcoEnabled {
                                     StatusBadge(text: "DCO", background: palette.onlineBg, foreground: palette.onlineText)
                                 }
-                                if node.supportsIPv6 {
-                                    StatusBadge(text: "IPv6", background: DS.IconColor.teal.opacity(0.14),
-                                                foreground: DS.IconColor.teal)
-                                }
                             }
-                            Text(node.region?.isEmpty == false ? (node.region ?? "") : node.address)
-                                .font(DS.Font.caption)
-                                .foregroundStyle(palette.mutedForeground)
+                            if let region = node.region, !region.isEmpty {
+                                Text(region)
+                                    .font(DS.Font.caption)
+                                    .foregroundStyle(palette.mutedForeground)
+                            }
                         }
                     }
                     Spacer()
                     NodeStatusBadge(status: node.status)
+                }
+
+                // 已配置的 IPv4 / IPv6 地址（两者都配置时同时展示）
+                if node.displayIPv4 != nil || node.displayIPv6 != nil {
+                    VStack(spacing: 5) {
+                        if let v4 = node.displayIPv4 {
+                            addressRow(palette, label: "IPv4", value: v4, color: DS.IconColor.green)
+                        }
+                        if let v6 = node.displayIPv6 {
+                            addressRow(palette, label: "IPv6", value: v6, color: DS.IconColor.teal)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(palette.muted.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                 }
 
                 HStack(spacing: 0) {
@@ -381,10 +418,17 @@ struct HomeView: View {
                     StatBar(label: "磁盘", value: node.diskUsage, icon: "internaldrive")
                 }
 
-                HStack {
-                    Text("实时 ↑ \(Format.bytes(node.rxRateValue))/s · ↓ \(Format.bytes(node.txRateValue))/s")
+                HStack(spacing: 7) {
+                    Text("实时")
                         .font(DS.Font.caption)
                         .foregroundStyle(palette.mutedForeground)
+                    Text("↑ \(Format.bytes(node.rxRateValue))/s")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(DS.IconColor.green)
+                    VLine(height: 10)
+                    Text("↓ \(Format.bytes(node.txRateValue))/s")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(DS.IconColor.teal)
                     Spacer()
                     if !node.usable {
                         Text(node.unusableReason)
@@ -403,6 +447,25 @@ struct HomeView: View {
         .opacity(node.usable ? 1 : 0.6)
     }
 
+    /// 单行地址展示（IPv4 / IPv6）
+    private func addressRow(_ palette: Palette, label: String, value: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(color)
+                .padding(.horizontal, 6)
+                .frame(height: 16)
+                .background(color.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            Text(value)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(palette.secondaryText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+    }
+
     private func metricCell(_ palette: Palette, title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
@@ -418,25 +481,44 @@ struct HomeView: View {
             if let node = selectedNode {
                 HStack(spacing: 10) {
                     IconTile(icon: "server.rack", color: DS.IconColor.green, size: 38)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(node.name).font(DS.Font.section).foregroundStyle(palette.foreground)
-                        Text(node.address).font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
+                        HStack(spacing: 6) {
+                            if let v4 = node.displayIPv4 {
+                                Text(v4)
+                                    .font(DS.Font.caption)
+                                    .foregroundStyle(palette.mutedForeground)
+                                    .lineLimit(1).truncationMode(.middle)
+                            }
+                            if node.displayIPv4 != nil && node.displayIPv6 != nil {
+                                VLine(height: 9)
+                            }
+                            if let v6 = node.displayIPv6 {
+                                Text(v6)
+                                    .font(DS.Font.caption)
+                                    .foregroundStyle(palette.mutedForeground)
+                                    .lineLimit(1).truncationMode(.middle)
+                            }
+                        }
                     }
-                    Spacer()
+                    Spacer(minLength: 6)
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             showServerPicker = true
                             selectedLineId = nil
                         }
                     } label: {
-                        Text("更换")
-                            .font(DS.Font.caption)
-                            .foregroundStyle(palette.primary)
-                            .padding(.horizontal, 10)
-                            .frame(height: DS.Size.buttonHeightSmall)
-                            .background(palette.card)
-                            .overlay(Capsule().stroke(palette.border, lineWidth: 1))
-                            .clipShape(Capsule())
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("更换")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(height: DS.Size.buttonHeightSmall)
+                        .background(palette.accentGradient)
+                        .clipShape(Capsule())
                     }
                     .buttonStyle(PressableStyle())
                 }
@@ -445,12 +527,16 @@ struct HomeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
             }
 
-            if categories.count > 2 {
+            if categories.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(categories, id: \.self) { item in
                             ChipButton(title: item, selected: item == category) {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { category = item }
+                            }
+                            // 「全部」与其余分类之间用竖线分隔
+                            if item == "全部" && categories.count > 1 {
+                                VLine(height: 16)
                             }
                         }
                     }
@@ -521,12 +607,17 @@ struct HomeView: View {
 
     private func bottomBar(_ palette: Palette, node: ServerNode, line: VPNLine) -> some View {
         VStack(spacing: 8) {
-            HStack {
-                Text("\(node.name) · \(line.name)")
+            HStack(spacing: 8) {
+                Text(node.name)
                     .font(DS.Font.bodySmall)
                     .foregroundStyle(palette.secondaryText)
                     .lineLimit(1)
-                Spacer()
+                VLine(height: 10)
+                Text(line.name)
+                    .font(DS.Font.bodySmall)
+                    .foregroundStyle(palette.secondaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
                 Text("\(line.protocolUpper) \(line.port)")
                     .font(DS.Font.caption)
                     .foregroundStyle(palette.mutedForeground)
@@ -778,17 +869,16 @@ struct HomeView: View {
     }
 }
 
-// MARK: - 连接状态圆环（内部彩色泡泡 + 渐变描边）
+// MARK: - 连接状态圆环（极光光环：渐变描边 + 光晕呼吸 + 中心计时）
 
 private struct ConnectRing: View {
     let status: NEVPNStatus
     let palette: Palette
+    /// 已连接时长（如 12:34），连接成功后显示在圆环中央
+    let duration: String
 
-    @State private var spin = false
-    @State private var bubbles: [Bubble] = []
-    @State private var animate = false
-
-    private let colorTimer = Timer.publish(every: 1.6, on: .main, in: .common).autoconnect()
+    @State private var sweep = false
+    @State private var breathe = false
 
     private var isConnected: Bool { status == .connected }
     private var isBusy: Bool { status == .connecting || status == .reasserting || status == .disconnecting }
@@ -798,6 +888,8 @@ private struct ConnectRing: View {
         if isBusy { return DS.IconColor.teal }
         return palette.mutedForeground
     }
+
+    private var ringWidth: CGFloat { 9 }
 
     private var label: String {
         switch status {
@@ -809,136 +901,103 @@ private struct ConnectRing: View {
         }
     }
 
-    /// 单个泡泡：位置 / 大小 / 上浮节奏 / 当前颜色均随机
-    private struct Bubble: Identifiable {
-        let id = UUID()
-        var x: CGFloat          // -1 ... 1
-        var y: CGFloat          // -1 ... 1
-        var size: CGFloat
-        var delay: Double
-        var duration: Double
-        var colorIndex: Int
-    }
-
     var body: some View {
         ZStack {
+            // 外层光晕：持续呼吸，营造「运行中」的光感
+            Circle()
+                .stroke(palette.connectionGradient, lineWidth: 18)
+                .blur(radius: 16)
+                .opacity(isConnected ? (breathe ? 0.55 : 0.30) : (isBusy ? 0.26 : 0.08))
+                .scaleEffect(breathe ? 1.02 : 0.97)
+                .animation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: breathe)
+
             // 底环
             Circle()
-                .stroke(palette.muted, lineWidth: 10)
+                .stroke(palette.muted, lineWidth: ringWidth)
 
-            // 渐变描边（连接中旋转；已连接缓慢流转）
-            Circle()
-                .trim(from: 0, to: isBusy ? 0.3 : 1)
-                .stroke(palette.connectionGradient,
-                        style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                .rotationEffect(.degrees(spin ? 360 : 0))
-                .animation(
-                    .linear(duration: isBusy ? 1.1 : 9).repeatForever(autoreverses: false),
-                    value: spin
-                )
-
-            // 内部：柔和底色 + 彩色泡泡
+            // 内部柔和径向底色
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [tint.opacity(isConnected ? 0.16 : 0.08),
-                                 tint.opacity(0.02)],
-                        center: .center, startRadius: 4, endRadius: 104
+                        colors: [tint.opacity(isConnected ? 0.16 : 0.07), tint.opacity(0.015)],
+                        center: .center, startRadius: 6, endRadius: 100
                     )
                 )
+                .padding(ringWidth + 2)
 
-            if isConnected {
-                bubbleField
+            // 渐变主环（缓慢流转；未连接时淡显）
+            Circle()
+                .stroke(
+                    palette.connectionGradient,
+                    style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
+                )
+                .opacity(isConnected ? 1 : (isBusy ? 0.9 : 0.32))
+                .rotationEffect(.degrees(sweep ? 360 : 0))
+                .animation(
+                    .linear(duration: isBusy ? 1.6 : 16).repeatForever(autoreverses: false),
+                    value: sweep
+                )
+
+            // 高光彗尾：连接中快速巡游，已连接缓慢扫过
+            if isConnected || isBusy {
+                Circle()
+                    .trim(from: 0, to: 0.14)
+                    .stroke(
+                        AngularGradient(
+                            colors: [.white.opacity(0), .white.opacity(0.9), .white.opacity(0)],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(sweep ? 360 : 0))
+                    .animation(
+                        .linear(duration: isBusy ? 1.3 : 6).repeatForever(autoreverses: false),
+                        value: sweep
+                    )
+                    .opacity(isBusy ? 0.95 : 0.5)
             }
 
-            VStack(spacing: 6) {
-                if !isConnected {
-                    Image(systemName: "bolt.horizontal.fill")
-                        .font(.system(size: 26, weight: .bold))
+            // 中心：已连接显示计时；连接中显示状态
+            if isConnected {
+                VStack(spacing: 4) {
+                    Text(duration)
+                        .font(.system(size: 34, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(palette.foreground)
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(DS.IconColor.green)
+                            .frame(width: 7, height: 7)
+                            .shadow(color: DS.IconColor.green.opacity(0.6), radius: 3)
+                        Text(label)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(DS.IconColor.green)
+                    }
+                }
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: isBusy ? "arrow.triangle.2.circlepath" : "power")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .rotationEffect(.degrees(isBusy && sweep ? 360 : 0))
+                        .animation(
+                            .linear(duration: 1.2).repeatForever(autoreverses: false),
+                            value: sweep
+                        )
+                    Text(label)
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(tint)
                 }
-                Text(label)
-                    .font(.system(size: isConnected ? 17 : 16, weight: .semibold))
-                    .foregroundStyle(isConnected ? palette.foreground : tint)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(palette.card.opacity(isConnected ? 0.82 : 0.0))
-            )
         }
         .onAppear {
-            spin = true
-            if bubbles.isEmpty { bubbles = makeBubbles() }
-            animate = true
+            sweep = true
+            breathe = true
         }
-        .onChange(of: status) { _ in spin = true }
-        .onReceive(colorTimer) { _ in
-            guard isConnected else { return }
-            // 每个泡泡随机渐变到新的颜色
-            withAnimation(.easeInOut(duration: 1.5)) {
-                for index in bubbles.indices {
-                    bubbles[index].colorIndex = Int.random(in: 0..<Palette.bubbleColors.count)
-                }
-            }
+        .onChange(of: status) { _ in
+            // 状态切换时重新起转，保证速度与状态一致
+            sweep = false
+            DispatchQueue.main.async { sweep = true }
+            breathe = true
         }
-    }
-
-    /// 圆内彩色泡泡
-    private var bubbleField: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            ZStack {
-                ForEach(bubbles) { bubble in
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    Palette.bubbleColors[bubble.colorIndex % Palette.bubbleColors.count].opacity(0.95),
-                                    Palette.bubbleColors[bubble.colorIndex % Palette.bubbleColors.count].opacity(0.45),
-                                ],
-                                center: .init(x: 0.35, y: 0.3),
-                                startRadius: 0.5,
-                                endRadius: bubble.size * 0.75
-                            )
-                        )
-                        .frame(width: bubble.size, height: bubble.size)
-                        .overlay(
-                            Circle().stroke(Color.white.opacity(0.35), lineWidth: 0.8)
-                        )
-                        .offset(x: bubble.x * side * 0.34,
-                                y: animate ? -(side * 0.5) : (side * 0.5))
-                        .opacity(bubble.size / 22 * 0.55 + 0.35)
-                        .animation(
-                            .linear(duration: bubble.duration)
-                            .repeatForever(autoreverses: false)
-                            .delay(bubble.delay),
-                            value: animate
-                        )
-                }
-            }
-            .frame(width: side, height: side)
-            .mask(
-                Circle().padding(14)
-            )
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func makeBubbles() -> [Bubble] {
-        var list: [Bubble] = []
-        for index in 0..<16 {
-            list.append(
-                Bubble(
-                    x: CGFloat.random(in: -1...1),
-                    y: CGFloat.random(in: -1...1),
-                    size: CGFloat.random(in: 7...21),
-                    delay: Double(index) * 0.28 + Double.random(in: 0...0.6),
-                    duration: Double.random(in: 3.2...5.4),
-                    colorIndex: Int.random(in: 0..<Palette.bubbleColors.count)
-                )
-            )
-        }
-        return list
     }
 }

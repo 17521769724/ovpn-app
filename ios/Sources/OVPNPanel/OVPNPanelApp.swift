@@ -32,8 +32,8 @@ struct RootView: View {
             // 全局横幅提示（与 Web 端 toast 一致）
             ToastHost()
         }
-        // 全局统一导航/按钮色调：返回按钮与链接不再使用系统蓝色
-        .tint(palette.foreground)
+        // 全局统一导航色调：返回按钮 / 链接使用主题绿，不使用黑色或系统蓝
+        .tint(palette.primary)
     }
 }
 
@@ -71,7 +71,7 @@ struct MainTabView: View {
             tabBar(palette)
         }
         .pageBackground()
-        .tint(palette.foreground)
+        .tint(palette.primary)
     }
 
     private func tabBar(_ palette: Palette) -> some View {

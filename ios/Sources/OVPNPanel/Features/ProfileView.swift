@@ -28,11 +28,14 @@ struct ProfileView: View {
                 }
                 .padding(.top, 4)
 
-                Text("客户端 v\(AppInfo.version) (Build \(AppInfo.build)) · \(app.masterURL)")
-                    .font(DS.Font.caption)
-                    .foregroundStyle(palette.mutedForeground)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 4)
+                HStack(spacing: 8) {
+                    Text("客户端 v\(AppInfo.version) (Build \(AppInfo.build))")
+                    VLine(height: 10)
+                    Text(app.masterURL).lineLimit(1).truncationMode(.middle)
+                }
+                .font(DS.Font.caption)
+                .foregroundStyle(palette.mutedForeground)
+                .padding(.top, 4)
             }
             .padding(.horizontal, DS.Size.pagePadding)
             .padding(.top, 8)
@@ -57,28 +60,21 @@ struct ProfileView: View {
 
     // MARK: - 账户资产（等级 / 金币 / 余额）
 
-    /// 三格紧凑资产条：用渐变底 + 彩色图标呈现，与用户卡片形成视觉层次
+    /// 三格资产条：与下方「流量使用」保持同一卡片底色，仅用彩色图标区分
     private func assetsStrip(_ palette: Palette) -> some View {
-        HStack(spacing: 0) {
-            assetCell(palette, icon: "star.circle.fill", color: DS.IconColor.teal,
-                      title: "等级", value: "Lv.\(app.user?.levelValue ?? 1)")
-            assetDivider(palette)
-            assetCell(palette, icon: "bitcoinsign.circle.fill", color: DS.IconColor.amber,
-                      title: "金币", value: "\(app.user?.coinsValue ?? 0)")
-            assetDivider(palette)
-            assetCell(palette, icon: "creditcard.fill", color: DS.IconColor.green,
-                      title: "余额", value: String(format: "%.2f", app.user?.balanceYuanValue ?? 0))
+        AppCard(padding: 0) {
+            HStack(spacing: 0) {
+                assetCell(palette, icon: "star.circle.fill", color: DS.IconColor.teal,
+                          title: "等级", value: "Lv.\(app.user?.levelValue ?? 1)")
+                assetDivider(palette)
+                assetCell(palette, icon: "bitcoinsign.circle.fill", color: DS.IconColor.amber,
+                          title: "金币", value: "\(app.user?.coinsValue ?? 0)")
+                assetDivider(palette)
+                assetCell(palette, icon: "creditcard.fill", color: DS.IconColor.green,
+                          title: "余额", value: String(format: "%.2f", app.user?.balanceYuanValue ?? 0))
+            }
+            .padding(.vertical, 14)
         }
-        .padding(.vertical, 14)
-        .background(
-            LinearGradient(
-                colors: [palette.primary.opacity(palette.scheme == .dark ? 0.20 : 0.12),
-                         DS.Brand.teal.opacity(0.06)],
-                startPoint: .leading, endPoint: .trailing
-            )
-        )
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(palette.border, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
     }
 
     private func assetCell(_ palette: Palette, icon: String, color: Color,
@@ -100,54 +96,70 @@ struct ProfileView: View {
         Rectangle().fill(palette.border).frame(width: 1, height: 34)
     }
 
-    // MARK: - 用户卡片
+    // MARK: - 用户卡片（渐变底：主题色示意，作为页面视觉焦点）
 
     private func userCard(_ palette: Palette) -> some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(
-                            LinearGradient(colors: [DS.IconColor.green, DS.IconColor.teal],
-                                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                        .frame(width: 48, height: 48)
-                        .overlay(
-                            Text(String(app.user?.username.prefix(1) ?? "U").uppercased())
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
-                        )
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(app.user?.username ?? "-")
-                            .font(DS.Font.section)
-                            .foregroundStyle(palette.foreground)
-                        Text(app.user?.email ?? "未绑定邮箱")
-                            .font(DS.Font.caption)
-                            .foregroundStyle(palette.secondaryText)
-                    }
-                    Spacer()
-                    if let center {
-                        StatusBadge(
-                            text: center.quota.valid ? "正常" : "受限",
-                            background: center.quota.valid ? palette.onlineBg : palette.offlineBg,
-                            foreground: center.quota.valid ? palette.onlineText : palette.offlineText
-                        )
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(
+                        LinearGradient(colors: [DS.IconColor.green, DS.IconColor.teal],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Text(String(app.user?.username.prefix(1) ?? "U").uppercased())
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white)
+                    )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(app.user?.username ?? "-")
+                        .font(DS.Font.section)
+                        .foregroundStyle(palette.foreground)
+                    Text(app.user?.email ?? "未绑定邮箱")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(palette.secondaryText)
                 }
-
+                Spacer()
                 if let center {
-                    if !center.quota.valid {
-                        BannerBar(message: center.quota.reason)
-                    }
-                    VStack(spacing: 6) {
-                        InfoRow(label: "当前套餐", value: center.plan?.name ?? "未订阅")
-                        InfoRow(label: "到期时间", value: Format.dateOnly(app.user?.planExpiresAt))
-                        InfoRow(label: "限速", value: Format.speed(app.user?.speedLimitKbps ?? 0))
-                        InfoRow(label: "设备上限", value: (app.user?.deviceLimit ?? 0) > 0 ? "\(app.user?.deviceLimit ?? 0) 台" : "不限")
-                    }
+                    StatusBadge(
+                        text: center.quota.valid ? "正常" : "受限",
+                        background: center.quota.valid ? palette.onlineBg : palette.offlineBg,
+                        foreground: center.quota.valid ? palette.onlineText : palette.offlineText
+                    )
+                }
+            }
+
+            if let center {
+                if !center.quota.valid {
+                    BannerBar(message: center.quota.reason)
+                }
+                VStack(spacing: 6) {
+                    InfoRow(label: "当前套餐", value: center.plan?.name ?? "未订阅")
+                    InfoRow(label: "到期时间", value: Format.dateOnly(app.user?.planExpiresAt))
+                    InfoRow(label: "限速", value: Format.speed(app.user?.speedLimitKbps ?? 0))
+                    InfoRow(label: "设备上限", value: (app.user?.deviceLimit ?? 0) > 0 ? "\(app.user?.deviceLimit ?? 0) 台" : "不限")
                 }
             }
         }
+        .padding(DS.Size.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            ZStack {
+                palette.card
+                LinearGradient(
+                    colors: [palette.primary.opacity(palette.scheme == .dark ? 0.24 : 0.14),
+                             DS.Brand.teal.opacity(palette.scheme == .dark ? 0.10 : 0.06),
+                             Color.clear],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.xl)
+                .stroke(palette.primary.opacity(0.20), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
     }
 
     // MARK: - 流量（纯绿色统计，与 Web 端一致）
@@ -166,7 +178,7 @@ struct ProfileView: View {
                             set: { trafficDays = $0 == 0 ? 7 : 15 }
                         )
                     )
-                    .frame(width: 148)
+                    .fixedSize()
                 }
 
                 if let center {
@@ -326,8 +338,12 @@ struct ProfileView: View {
     }
 
     /// 按当前选择（近 7 / 15 天）拉取流量统计
+    /// 失败或被取消时保留上一次数据，避免下拉刷新后图表短暂消失
     private func loadTraffic() async {
-        traffic = try? await APIClient.shared.fetchTraffic(days: trafficDays)
+        let days = trafficDays
+        guard let value = try? await APIClient.shared.fetchTraffic(days: days) else { return }
+        guard days == trafficDays else { return }
+        traffic = value
     }
 }
 

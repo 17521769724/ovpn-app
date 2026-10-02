@@ -81,21 +81,35 @@ struct ServerNode: Decodable, Identifiable {
     let unusableReason: String
     /// IPv6 地址（v6 优先连接用，未配置则为空/缺失）
     let addressV6: String?
-    let hasIPv4: Bool?
-    let hasIPv6: Bool?
+    // 注：属性名必须与 convertFromSnakeCase 的映射一致（has_ipv4 → hasIpv4），
+    // 否则该字段会被静默忽略。
+    let hasIpv4: Bool?
+    let hasIpv6: Bool?
 
     var rxRateValue: Int64 { rxRate ?? 0 }
     var txRateValue: Int64 { txRate ?? 0 }
 
+    /// 用于展示的 IPv4 地址（未配置返回 nil）
+    var displayIPv4: String? {
+        let value = address.trimmingCharacters(in: .whitespaces)
+        return value.isEmpty ? nil : value
+    }
+
+    /// 用于展示的 IPv6 地址（未配置返回 nil）
+    var displayIPv6: String? {
+        let value = (addressV6 ?? "").trimmingCharacters(in: .whitespaces)
+        return value.isEmpty ? nil : value
+    }
+
     /// 是否支持 IPv6（兼容老版本主控：缺失该字段时按 address_v6 是否有值判断）
     var supportsIPv6: Bool {
-        if let hasIPv6 { return hasIPv6 }
+        if let hasIpv6 { return hasIpv6 }
         return !(addressV6 ?? "").trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     /// 是否支持 IPv4（老主控默认支持）
     var supportsIPv4: Bool {
-        if let hasIPv4 { return hasIPv4 }
+        if let hasIpv4 { return hasIpv4 }
         return !address.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
@@ -224,8 +238,10 @@ struct PlanItem: Decodable, Identifiable {
     var coinPriceValue: Int { coinPrice ?? 0 }
     var bonusCoinsValue: Int { bonusCoins ?? 0 }
     var levelValue: Int { level ?? 1 }
-    /// 是否可用金币兑换（兼容老主控）
+    /// 是否可用金币兑换：以主控下发的「是否支持兑换」为准
+    /// （余额不足时按钮仍展示，点击后提示还差多少金币）
     var exchangeable: Bool {
+        if let coinExchangeEnabled { return coinExchangeEnabled }
         if let canExchange { return canExchange }
         return coinPriceValue > 0
     }

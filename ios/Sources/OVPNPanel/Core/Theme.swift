@@ -229,14 +229,6 @@ struct Palette {
         )
     }
 
-    /// 连接成功页泡泡动画用的彩色调色板
-    static let bubbleColors: [Color] = [
-        Color(hex: 0x34D399), Color(hex: 0x10B981), Color(hex: 0x14B8A6),
-        Color(hex: 0x06B6D4), Color(hex: 0x22D3EE), Color(hex: 0x84CC16),
-        Color(hex: 0xFACC15), Color(hex: 0xFB923C), Color(hex: 0x60A5FA),
-        Color(hex: 0xA78BFA), Color(hex: 0xF472B6), Color(hex: 0x4ADE80),
-    ]
-
     func toastStyle(_ kind: BannerKind) -> DS.ToastStyle { DS.ToastStyle.of(kind, dark: isDark) }
 }
 
