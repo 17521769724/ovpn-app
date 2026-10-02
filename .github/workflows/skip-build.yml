@@ -44,6 +44,18 @@ jobs:
           brew install xcodegen
           brew install ldid || echo "ldid 安装失败，后续使用 codesign 兜底"
 
+      # Darwin 侧的 skipstone 插件需要 skip 工具链；直接下载官方二进制（比 brew 源码编译快得多）
+      - name: 安装 Skip 工具链（官方二进制）
+        run: |
+          curl -fsSL -o /tmp/skip-macos.zip \
+            https://github.com/skiptools/skip/releases/download/1.9.13/skip-macos.zip
+          rm -rf /tmp/skipdl && mkdir -p /tmp/skipdl ~/.skip/bin
+          unzip -oq /tmp/skip-macos.zip -d /tmp/skipdl
+          cp /tmp/skipdl/skip.artifactbundle/macos/skip "$HOME/.skip/bin/skip"
+          chmod +x "$HOME/.skip/bin/skip"
+          echo "$HOME/.skip/bin" >> "$GITHUB_PATH"
+          "$HOME/.skip/bin/skip" --version || true
+
       - name: 缓存 SwiftPM 依赖
         uses: actions/cache@v4
         with:
@@ -102,10 +114,13 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build \
+            -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee /tmp/xcodebuild.log | tail -40 || STATUS=$?
           echo "=== 编译错误汇总 ==="
           grep -E ": error:" /tmp/xcodebuild.log || echo "(无 error)"
+          echo "=== 插件相关 ==="
+          grep -iE "skipstone|plug-in|plugin" /tmp/xcodebuild.log | tail -30 || true
           exit $STATUS
 
       - name: 打包为未签名 IPA（巨魔自签安装，注入 NetworkExtension entitlements）
@@ -182,25 +197,21 @@ jobs:
           ls "$ANDROID_HOME" || true
           gradle --version | head -8
 
-      - name: 缓存 Skip 工具链（brew 从源码编译约 20 分钟，缓存后秒级）
-        uses: actions/cache@v4
-        with:
-          path: |
-            /opt/homebrew/Cellar/skip
-            /opt/homebrew/opt/skip
-            /opt/homebrew/bin/skip
-            /opt/homebrew/bin/skip-*
-            ~/Library/Caches/Homebrew/downloads
-          key: skip-toolchain-brew-1.9.13
-
-      - name: 安装 Skip 工具链
+      - name: 安装 Skip 工具链（官方二进制，避免 brew 源码编译约 20 分钟）
         run: |
           if command -v skip >/dev/null 2>&1; then
-            echo "Skip 工具链已从缓存恢复：$(skip --version 2>&1 | head -1)"
+            echo "Skip 工具链已存在：$(skip --version 2>&1 | head -1)"
           else
-            brew install skiptools/skip/skip
+            curl -fsSL -o /tmp/skip-macos.zip \
+              https://github.com/skiptools/skip/releases/download/1.9.13/skip-macos.zip
+            rm -rf /tmp/skipdl && mkdir -p /tmp/skipdl "$HOME/.skip/bin"
+            unzip -oq /tmp/skip-macos.zip -d /tmp/skipdl
+            cp /tmp/skipdl/skip.artifactbundle/macos/skip "$HOME/.skip/bin/skip"
+            chmod +x "$HOME/.skip/bin/skip"
+            echo "$HOME/.skip/bin" >> "$GITHUB_PATH"
           fi
-          skip checkup || true
+          export PATH="$HOME/.skip/bin:$PATH"
+          skip --version || true
 
       - name: 缓存 Gradle 与 SwiftPM 依赖
         uses: actions/cache@v4
