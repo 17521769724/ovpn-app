@@ -66,14 +66,18 @@ jobs:
             -scheme OVPNPanel 2>&1 | tail -20
 
       # 快速失败：先跑一遍 SwiftPM 构建触发 skipstone 转译，
-      # 把 Android 侧不支持的 API 一次性打印出来（否则要等 Android job 装完工具链才看得到）
+      # 把 Android 侧不支持的 API 一次性打印出来（否则要等 Android job 装完工具链才看得到）。
+      # 注意：macOS 主机上 `swift build` 会因缺少 UIKit 而失败，属正常现象，故只以 Skip 转译错误为准。
       - name: Skip 转译自检
         working-directory: ${{ env.SKIP_APP_DIR }}
         run: |
           swift build 2>&1 | tee /tmp/skipcheck.log | tail -5 || true
           echo "=== Skip 转译错误 ==="
-          grep -iE "error:|not yet available in Skip|cannot be merged|unable to determine" /tmp/skipcheck.log | sort -u | head -60
-          if grep -qiE "error:" /tmp/skipcheck.log; then echo "转译存在错误，终止"; exit 1; fi
+          grep -iE "not yet available in Skip|cannot be merged|unable to determine the owning type" /tmp/skipcheck.log | sort -u | head -60 || true
+          if grep -qiE "not yet available in Skip|cannot be merged|unable to determine the owning type" /tmp/skipcheck.log; then
+            echo "转译存在错误，终止"; exit 1
+          fi
+          echo "转译自检通过（Android 侧无不受支持的 API）"
 
       - name: 构建 App（不签名）
         working-directory: ${{ env.SKIP_APP_DIR }}/Darwin
