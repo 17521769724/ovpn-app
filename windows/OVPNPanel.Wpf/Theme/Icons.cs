@@ -92,6 +92,9 @@ namespace OVPNPanel.Theme
         /// <summary>构造一个描边风格的图标（默认线宽 2，圆头）</summary>
         public static Path Create(string name, double size, Color color, double thickness = 2)
         {
+            // 24×24 视图 → 目标尺寸：统一用 RenderTransform 缩放，
+            // 保证不同图标的相对大小一致（若用 Stretch=Uniform 会各自撑满包围盒，大小不统一）。
+            double scale = size / ViewBox;
             var path = new Path
             {
                 Stroke = AppTheme.Palette.B(color),
@@ -100,25 +103,23 @@ namespace OVPNPanel.Theme
                 StrokeEndLineCap = PenLineCap.Round,
                 StrokeLineJoin = PenLineJoin.Round,
                 Fill = null,
-                Stretch = Stretch.Uniform,
+                Stretch = Stretch.None,
                 Width = size,
                 Height = size,
                 Data = ParseGeometry(Data(name) ?? "M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3"),
+                RenderTransform = new ScaleTransform(scale, scale),
                 SnapsToDevicePixels = true,
             };
             return path;
         }
 
-        /// <summary>把 24×24 视图的路径数据缩放到目标尺寸</summary>
+        /// <summary>把 24×24 视图的路径数据解析为 Geometry</summary>
         public static Geometry ParseGeometry(string data)
         {
-            var g = (Geometry)Geometry.Parse(data);
-            var scale = new ScaleTransform(ViewBox / ViewBox, ViewBox / ViewBox);
-            var group = new TransformGroup();
-            group.Children.Add(scale);
-            g.Transform = group;
-            g.Freeze();
-            return g;
+            // 注意：Geometry.Parse 返回的可能是已冻结（只读）对象，不能再修改其属性；
+            // Path 上已设置 Stretch=Uniform + 宽高，缩放由布局完成，这里直接返回即可。
+            var geometry = Geometry.Parse(data);
+            return geometry;
         }
     }
 }
