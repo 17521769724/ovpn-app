@@ -95,7 +95,7 @@ struct ProfileView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(color)
             Text(value)
-                .font(.system(size: 16, weight: .semibold).monospacedDigit())
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(palette.foreground)
                 .lineLimit(1).minimumScaleFactor(0.7)
             Text(title).font(DS.Font.caption).foregroundStyle(palette.mutedForeground)

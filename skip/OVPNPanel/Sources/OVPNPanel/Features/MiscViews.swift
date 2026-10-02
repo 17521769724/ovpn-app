@@ -141,7 +141,7 @@ struct ActivationView: View {
                             ForEach(records) { record in
                                 VStack(spacing: 5) {
                                     HStack {
-                                        Text(record.code).font(.system(size: 12, design: .monospaced))
+                                        Text(record.code).font(.system(size: 12))
                                             .foregroundStyle(palette.foreground)
                                         Spacer()
                                         Text(Format.dateTime(record.usedAt))
@@ -236,7 +236,7 @@ struct CoinsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("我的金币").font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
                         Text("\(payload?.coins ?? 0)")
-                            .font(.system(size: 28, weight: .semibold).monospacedDigit())
+                            .font(.system(size: 28, weight: .semibold))
                             .foregroundStyle(DS.IconColor.orange)
                     }
                     Spacer()
@@ -513,7 +513,7 @@ struct InviteView: View {
                 }
                 HStack {
                     Text(code.isEmpty ? "------" : code)
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(palette.foreground)
                         .textSelection(.enabled)
                     Spacer()

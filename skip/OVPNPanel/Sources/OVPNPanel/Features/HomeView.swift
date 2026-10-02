@@ -237,7 +237,7 @@ struct HomeView: View {
                     Image(systemName: primaryIcon).font(.system(size: 13, weight: .bold))
                         .foregroundStyle(DS.IconColor.green)
                     Text(primary)
-                        .font(.system(size: 18, weight: .semibold).monospacedDigit())
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(palette.foreground)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
@@ -245,7 +245,7 @@ struct HomeView: View {
                     Image(systemName: secondaryIcon).font(.system(size: 13, weight: .bold))
                         .foregroundStyle(DS.IconColor.teal)
                     Text(secondary)
-                        .font(.system(size: 15, weight: .medium).monospacedDigit())
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(palette.secondaryText)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
@@ -264,16 +264,16 @@ struct HomeView: View {
                     Text("本次流量").font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
                 }
                 Text(Format.bytes(sessionTx + sessionRx))
-                    .font(.system(size: 18, weight: .semibold).monospacedDigit())
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(palette.foreground)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 HStack(spacing: 6) {
                     Text("↑ \(Format.bytes(sessionRx))")
-                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(DS.IconColor.green)
                     VLine(height: 9)
                     Text("↓ \(Format.bytes(sessionTx))")
-                        .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(DS.IconColor.teal)
                 }
                 .lineLimit(1).minimumScaleFactor(0.7)
@@ -488,7 +488,7 @@ struct HomeView: View {
                 .background(color.opacity(0.14))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             Text(value)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: 12))
                 .foregroundStyle(palette.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -1015,7 +1015,7 @@ private struct ConnectRing: View {
             if isConnected {
                 VStack(spacing: 4) {
                     Text(duration)
-                        .font(.system(size: 34, weight: .semibold).monospacedDigit())
+                        .font(.system(size: 34, weight: .semibold))
                         .foregroundStyle(palette.foreground)
                     HStack(spacing: 5) {
                         Circle()

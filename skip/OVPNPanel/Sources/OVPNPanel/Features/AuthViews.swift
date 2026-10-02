@@ -213,7 +213,7 @@ struct RegisterView: View {
                                                 ProgressView().scaleEffect(0.8)
                                             } else {
                                                 Text(captchaCode.isEmpty ? "点击获取" : captchaCode)
-                                                    .font(.system(size: 17, weight: .bold, design: .monospaced))
+                                                    .font(.system(size: 17, weight: .bold))
                                                     .foregroundStyle(DS.IconColor.amber)
                                                     .kerning(2)
                                             }

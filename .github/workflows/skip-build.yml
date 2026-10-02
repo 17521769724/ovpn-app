@@ -65,6 +65,16 @@ jobs:
             -project OVPNPanel.xcodeproj \
             -scheme OVPNPanel 2>&1 | tail -20
 
+      # 快速失败：先跑一遍 SwiftPM 构建触发 skipstone 转译，
+      # 把 Android 侧不支持的 API 一次性打印出来（否则要等 Android job 装完工具链才看得到）
+      - name: Skip 转译自检
+        working-directory: ${{ env.SKIP_APP_DIR }}
+        run: |
+          swift build 2>&1 | tee /tmp/skipcheck.log | tail -5 || true
+          echo "=== Skip 转译错误 ==="
+          grep -iE "error:|not yet available in Skip|cannot be merged|unable to determine" /tmp/skipcheck.log | sort -u | head -60
+          if grep -qiE "error:" /tmp/skipcheck.log; then echo "转译存在错误，终止"; exit 1; fi
+
       - name: 构建 App（不签名）
         working-directory: ${{ env.SKIP_APP_DIR }}/Darwin
         run: |
@@ -156,9 +166,24 @@ jobs:
           ls "$ANDROID_HOME" || true
           gradle --version | head -8
 
+      - name: 缓存 Skip 工具链（brew 从源码编译约 20 分钟，缓存后秒级）
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/homebrew/Cellar/skip
+            /opt/homebrew/opt/skip
+            /opt/homebrew/bin/skip
+            /opt/homebrew/bin/skip-*
+            ~/Library/Caches/Homebrew/downloads
+          key: skip-toolchain-brew-1.9.13
+
       - name: 安装 Skip 工具链
         run: |
-          brew install skiptools/skip/skip
+          if command -v skip >/dev/null 2>&1; then
+            echo "Skip 工具链已从缓存恢复：$(skip --version 2>&1 | head -1)"
+          else
+            brew install skiptools/skip/skip
+          fi
           skip checkup || true
 
       - name: 缓存 Gradle 与 SwiftPM 依赖

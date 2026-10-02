@@ -466,7 +466,6 @@ struct StatBar: View {
 
             Text(String(format: "%.0f%%", value))
                 .font(DS.Font.caption)
-                .monospacedDigit()
                 .foregroundStyle(palette.mutedForeground)
                 .frame(width: 36, alignment: .trailing)
         }

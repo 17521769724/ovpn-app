@@ -706,7 +706,7 @@ struct RechargeView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("账户余额").font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
                                 Text(Format.money(balanceCents, symbol: payload?.currencySymbol ?? "¥"))
-                                    .font(.system(size: 20, weight: .semibold).monospacedDigit())
+                                    .font(.system(size: 20, weight: .semibold))
                                     .foregroundStyle(palette.foreground)
                             }
                             Spacer()
