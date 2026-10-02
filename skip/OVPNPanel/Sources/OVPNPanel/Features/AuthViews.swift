@@ -34,7 +34,7 @@ struct SetupView: View {
                 AppCard {
                     VStack(alignment: .leading, spacing: 14) {
                         AppTextField(title: "主控地址", placeholder: "https://你的域名",
-                                     text: $address, keyboard: .URL)
+                                     text: $address, keyboard: UIKeyboardType.URL)
                         AppButton(title: "连接并继续", icon: "arrow.right", loading: loading) {
                             Task { await submit() }
                         }
@@ -193,7 +193,7 @@ struct RegisterView: View {
                             AppTextField(title: "用户名", placeholder: "3-32 位字母/数字/下划线", text: $username)
                             AppTextField(title: "密码", placeholder: "至少 6 位", text: $password, secure: true)
                             AppTextField(title: "确认密码", placeholder: "再次输入密码", text: $confirm, secure: true)
-                            AppTextField(title: "邮箱（选填）", placeholder: "用于找回密码", text: $email, keyboard: .emailAddress)
+                            AppTextField(title: "邮箱（选填）", placeholder: "用于找回密码", text: $email, keyboard: UIKeyboardType.emailAddress)
 
                             if captchaEnabled {
                                 HStack(alignment: .bottom, spacing: 10) {
@@ -215,11 +215,13 @@ struct RegisterView: View {
                                                 Text(captchaCode.isEmpty ? "点击获取" : captchaCode)
                                                     .font(.system(size: 17, weight: .bold))
                                                     .foregroundStyle(DS.IconColor.amber)
+#if !SKIP
                                                     .kerning(2)
+#endif
                                             }
                                         }
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(PlainButtonStyle())
                                 }
                                 Text("看不清？点击橙色方块刷新验证码")
                                     .font(DS.Font.caption)

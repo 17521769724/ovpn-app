@@ -734,7 +734,7 @@ struct RechargeView: View {
                     AppCard {
                         VStack(alignment: .leading, spacing: 10) {
                             AppTextField(title: "充值金额（元）", placeholder: "请输入充值金额（最少 1 元）",
-                                         text: $amountText, keyboard: .decimalPad)
+                                         text: $amountText, keyboard: UIKeyboardType.decimalPad)
                             // 快捷金额：金额与单位同一行展示，每行 3 个（三端一致）
                             VStack(alignment: .leading, spacing: 8) {
                                 ForEach(Array(quickAmountRows.enumerated()), id: \.offset) { _, rowValues in
