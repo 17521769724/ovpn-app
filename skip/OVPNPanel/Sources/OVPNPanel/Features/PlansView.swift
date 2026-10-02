@@ -98,7 +98,7 @@ struct PlansView: View {
         ScrollView {
             VStack(spacing: DS.Size.gapLarge) {
                 if let payload, !payload.purchaseEnabled {
-                    BannerBar(message: "站点当前已关闭购买功能", kind: .warning)
+                    BannerBar(message: "站点当前已关闭购买功能", kind: BannerKind.warning)
                 }
 
                 if loading && payload == nil {
@@ -189,7 +189,7 @@ struct PlansView: View {
                     }
 
                     if options.isEmpty {
-                        BannerBar(message: "站点暂未配置支付接口，请联系管理员完成支付", kind: .warning)
+                        BannerBar(message: "站点暂未配置支付接口，请联系管理员完成支付", kind: BannerKind.warning)
                     }
 
                     // 余额抵扣：不再展示支付方式选择
@@ -239,7 +239,7 @@ struct PlansView: View {
                     ? "正在创建订单…"
                     : "支付 \(Format.money(plan.priceCents, symbol: payload?.currencySymbol ?? "¥"))",
                 icon: "creditcard.fill",
-                style: .primary,
+                style: AppButton.Style.primary,
                 loading: paying,
                 disabled: paying || !canPay
             ) {
@@ -360,7 +360,7 @@ struct PlansView: View {
                         AppButton(
                             title: "金币兑换 \(plan.coinPriceValue)",
                             icon: "bitcoinsign.circle.fill",
-                            style: .secondary,
+                            style: AppButton.Style.secondary,
                             loading: paying
                         ) {
                             Task { await redeemWithCoins(plan: plan) }
@@ -368,7 +368,7 @@ struct PlansView: View {
                         AppButton(
                             title: "立即购买",
                             icon: "cart.fill",
-                            style: .primary,
+                            style: AppButton.Style.primary,
                             loading: paying,
                             disabled: !(payload?.purchaseEnabled ?? false)
                         ) {
@@ -379,7 +379,7 @@ struct PlansView: View {
                     AppButton(
                         title: "立即购买",
                         icon: "cart.fill",
-                        style: .primary,
+                        style: AppButton.Style.primary,
                         loading: paying,
                         disabled: !(payload?.purchaseEnabled ?? false)
                     ) {
@@ -412,14 +412,14 @@ struct PlansView: View {
                 channelId: channelId
             )
             if result.paidValue {
-                app.showToast(result.message.isEmpty ? "支付成功" : result.message, kind: .success)
+                app.showToast(result.message.isEmpty ? "支付成功" : result.message, kind: BannerKind.success)
                 await app.refreshUser()
                 await load()
             } else if result.payUrl.isEmpty {
-                app.showToast(result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message, kind: .warning)
+                app.showToast(result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message, kind: BannerKind.warning)
             } else {
                 payURL = result.payUrl
-                app.showToast("订单已创建，请在 10 分钟内完成支付", kind: .info)
+                app.showToast("订单已创建，请在 10 分钟内完成支付", kind: BannerKind.info)
             }
         } catch {
             app.report(error)
@@ -430,14 +430,14 @@ struct PlansView: View {
     private func redeemWithCoins(plan: PlanItem) async {
         guard plan.coinPriceValue > 0 else { return }
         guard (payload?.user?.coins ?? 0) >= plan.coinPriceValue else {
-            app.showToast("金币不足，需要 \(plan.coinPriceValue) 金币", kind: .warning)
+            app.showToast("金币不足，需要 \(plan.coinPriceValue) 金币", kind: BannerKind.warning)
             return
         }
         paying = true
         defer { paying = false }
         do {
             let result = try await APIClient.shared.createOrder(planId: plan.id, method: "coins", useCoins: true)
-            app.showToast(result.message.isEmpty ? "兑换成功" : result.message, kind: .success)
+            app.showToast(result.message.isEmpty ? "兑换成功" : result.message, kind: BannerKind.success)
             await app.refreshUser()
             await load()
         } catch {
@@ -645,7 +645,7 @@ struct OrdersView: View {
         do {
             let result = try await APIClient.shared.payOrder(id: order.id)
             if result.payUrl.isEmpty {
-                app.showToast(result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message, kind: .warning)
+                app.showToast(result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message, kind: BannerKind.warning)
             } else {
                 payURL = result.payUrl
             }
@@ -660,7 +660,7 @@ struct OrdersView: View {
         defer { busyId = nil }
         do {
             try await APIClient.shared.cancelOrder(id: order.id)
-            app.showToast("订单已取消", kind: .success)
+            app.showToast("订单已取消", kind: BannerKind.success)
             await load()
         } catch {
             app.report(error)
@@ -770,7 +770,7 @@ struct RechargeView: View {
                                 .font(DS.Font.bodySmall)
                                 .foregroundStyle(palette.secondaryText)
                             if options.isEmpty {
-                                BannerBar(message: "站点暂未配置支付接口，请联系管理员完成充值", kind: .warning)
+                                BannerBar(message: "站点暂未配置支付接口，请联系管理员完成充值", kind: BannerKind.warning)
                             } else {
                                 ForEach(options) { option in
                                     Button {
@@ -819,7 +819,7 @@ struct RechargeView: View {
                     AppButton(
                         title: paying ? "正在创建订单…" : "去支付 \(Format.money(Int((amountYuan * 100).rounded()), symbol: payload?.currencySymbol ?? "¥"))",
                         icon: "creditcard.fill",
-                        style: .primary,
+                        style: AppButton.Style.primary,
                         loading: paying,
                         disabled: paying || amountYuan < 1 || payTarget.isEmpty
                     ) {
@@ -913,11 +913,11 @@ struct RechargeView: View {
 
     private func recharge() async {
         guard amountYuan >= 1 else {
-            app.showToast("单次充值金额不得少于 1 元", kind: .warning)
+            app.showToast("单次充值金额不得少于 1 元", kind: BannerKind.warning)
             return
         }
         guard !payTarget.isEmpty else {
-            app.showToast("请选择支付接口", kind: .warning)
+            app.showToast("请选择支付接口", kind: BannerKind.warning)
             return
         }
         paying = true
@@ -928,10 +928,10 @@ struct RechargeView: View {
                 amountYuan: amountYuan, method: selectedMethod, channelId: channelId
             )
             if result.payUrl.isEmpty {
-                app.showToast(result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message, kind: .warning)
+                app.showToast(result.message.isEmpty ? "订单已创建，请联系管理员完成支付" : result.message, kind: BannerKind.warning)
             } else {
                 payURL = result.payUrl
-                app.showToast("订单已创建，请在 10 分钟内完成支付", kind: .info)
+                app.showToast("订单已创建，请在 10 分钟内完成支付", kind: BannerKind.info)
             }
         } catch {
             app.report(error)

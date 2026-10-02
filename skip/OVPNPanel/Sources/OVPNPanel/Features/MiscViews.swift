@@ -20,7 +20,7 @@ struct AnnouncementsView: View {
                     EmptyHint(icon: "megaphone", title: "暂无公告")
                 } else {
                     if let unread = payload?.unreadCount, unread > 0 {
-                        BannerBar(message: "有 \(unread) 条未读公告", kind: .warning)
+                        BannerBar(message: "有 \(unread) 条未读公告", kind: BannerKind.warning)
                     }
                     ForEach(payload?.announcements ?? []) { item in
                         AppCard {
@@ -174,7 +174,7 @@ struct ActivationView: View {
     private func redeem() async {
         let value = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
-            app.showToast("请输入激活码", kind: .warning)
+            app.showToast("请输入激活码", kind: BannerKind.warning)
             return
         }
         submitting = true
@@ -183,12 +183,12 @@ struct ActivationView: View {
         do {
             let preview = try await APIClient.shared.previewActivation(code: value)
             guard preview.valid else {
-                app.showToast(preview.message, kind: .error)
+                app.showToast(preview.message, kind: BannerKind.error)
                 return
             }
             let redeemResult = try await APIClient.shared.redeemActivation(code: value)
             result = redeemResult
-            app.showToast("兑换成功：\(redeemResult.planName)", kind: .success)
+            app.showToast("兑换成功：\(redeemResult.planName)", kind: BannerKind.success)
             code = ""
             await load()
             await app.refreshUser()
@@ -245,7 +245,7 @@ struct CoinsView: View {
                         .foregroundStyle(DS.IconColor.orange)
                 }
                 if let payload, payload.coinExchangeEnabled {
-                    BannerBar(message: "金币可在「套餐中心」兑换支持的套餐", kind: .info)
+                    BannerBar(message: "金币可在「套餐中心」兑换支持的套餐", kind: BannerKind.info)
                 }
             }
         }
@@ -411,14 +411,14 @@ struct FeedbackView: View {
 
     private func submit() async {
         guard content.trimmingCharacters(in: .whitespacesAndNewlines).count >= 5 else {
-            app.showToast("请填写反馈内容（至少 5 个字）", kind: .warning)
+            app.showToast("请填写反馈内容（至少 5 个字）", kind: BannerKind.warning)
             return
         }
         submitting = true
         defer { submitting = false }
         do {
             try await APIClient.shared.submitFeedback(lineId: nil, title: title, content: content, contact: contact)
-            app.showToast("提交成功，管理员会尽快处理", kind: .success)
+            app.showToast("提交成功，管理员会尽快处理", kind: BannerKind.success)
             title = ""
             content = ""
             contact = ""
@@ -447,7 +447,7 @@ struct InviteView: View {
                 hero(palette)
 
                 if payload?.inviteEnabled == false {
-                    BannerBar(message: "站点当前已关闭邀请奖励", kind: .warning)
+                    BannerBar(message: "站点当前已关闭邀请奖励", kind: BannerKind.warning)
                 } else {
                     // 固定结构：数据未就绪时先以占位展示，加载完成后仅数值变化，页面不跳动
                     codeCard(palette, payload: payload)
@@ -515,14 +515,16 @@ struct InviteView: View {
                     Text(code.isEmpty ? "------" : code)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(palette.foreground)
+#if !SKIP
                         .textSelection(.enabled)
+#endif
                     Spacer()
                     AppButton(title: copiedCode ? "已复制" : "复制", icon: copiedCode ? "checkmark" : "doc.on.doc",
-                              style: .secondary, height: DS.Size.buttonHeightSmall,
+                              style: AppButton.Style.secondary, height: DS.Size.buttonHeightSmall,
                               disabled: code.isEmpty) {
                         Clipboard.copy(code)
                         copiedCode = true
-                        app.showToast("邀请码已复制", kind: .success)
+                        app.showToast("邀请码已复制", kind: BannerKind.success)
                     }
                     .frame(width: 104)
                 }
@@ -538,12 +540,12 @@ struct InviteView: View {
                     .truncationMode(.middle)
                 HStack(spacing: 10) {
                     AppButton(title: copiedLink ? "已复制" : "复制链接",
-                              icon: "link", style: .secondary,
+                              icon: "link", style: AppButton.Style.secondary,
                               height: DS.Size.buttonHeightSmall,
                               disabled: urlString.isEmpty) {
                         Clipboard.copy(urlString)
                         copiedLink = true
-                        app.showToast("邀请链接已复制", kind: .success)
+                        app.showToast("邀请链接已复制", kind: BannerKind.success)
                     }
                     if !urlString.isEmpty, let url = URL(string: urlString) {
                         ShareLink(item: url) { shareLabel(palette) }
@@ -603,7 +605,7 @@ struct InviteView: View {
     }
 
     private func tipCard(_ palette: Palette) -> some View {
-        BannerBar(message: "好友注册成功后，奖励金币会自动到账，可在「套餐」页使用金币兑换套餐。", kind: .info)
+        BannerBar(message: "好友注册成功后，奖励金币会自动到账，可在「套餐」页使用金币兑换套餐。", kind: BannerKind.info)
     }
 
     private func load() async {
@@ -674,7 +676,7 @@ struct AccountSettingsView: View {
                         } else if securityLoaded {
                             AppTextField(title: "密保问题", placeholder: "例如：我的第一台服务器名字", text: $question)
                             AppTextField(title: "密保答案", placeholder: "找回密码时使用（不区分大小写）", text: $answer)
-                            AppButton(title: "保存密保", icon: "checkmark.shield.fill", style: .primary,
+                            AppButton(title: "保存密保", icon: "checkmark.shield.fill", style: AppButton.Style.primary,
                                       loading: savingSecurity) {
                                 Task { await saveSecurity() }
                             }
@@ -700,18 +702,18 @@ struct AccountSettingsView: View {
 
     private func changePassword() async {
         guard newPassword.count >= 6 else {
-            app.showToast("新密码至少 6 位", kind: .warning)
+            app.showToast("新密码至少 6 位", kind: BannerKind.warning)
             return
         }
         guard newPassword == confirmPassword else {
-            app.showToast("两次输入的新密码不一致", kind: .warning)
+            app.showToast("两次输入的新密码不一致", kind: BannerKind.warning)
             return
         }
         savingPassword = true
         defer { savingPassword = false }
         do {
             try await APIClient.shared.changePassword(old: oldPassword, new: newPassword)
-            app.showToast("密码已更新", kind: .success)
+            app.showToast("密码已更新", kind: BannerKind.success)
             oldPassword = ""
             newPassword = ""
             confirmPassword = ""
@@ -722,7 +724,7 @@ struct AccountSettingsView: View {
 
     private func saveSecurity() async {
         guard !question.isEmpty, answer.count >= 2 else {
-            app.showToast("请填写密保问题与答案（答案至少 2 个字符）", kind: .warning)
+            app.showToast("请填写密保问题与答案（答案至少 2 个字符）", kind: BannerKind.warning)
             return
         }
         savingSecurity = true
@@ -730,7 +732,7 @@ struct AccountSettingsView: View {
         do {
             try await APIClient.shared.updateSecurity(question: question, answer: answer)
             currentQuestion = question
-            app.showToast("密保已保存", kind: .success)
+            app.showToast("密保已保存", kind: BannerKind.success)
             answer = ""
         } catch {
             app.report(error)

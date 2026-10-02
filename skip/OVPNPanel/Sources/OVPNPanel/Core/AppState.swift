@@ -234,7 +234,7 @@ final class AppState: ObservableObject {
     nonisolated func report(_ error: Error) {
         let apiError = APIError.from(error)
         if apiError.isCancelled { return }
-        showToast(apiError.localizedDescription, kind: .error)
+        showToast(apiError.localizedDescription, kind: BannerKind.error)
     }
 
     func dismissToast() {

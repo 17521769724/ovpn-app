@@ -56,14 +56,14 @@ struct SetupView: View {
     private func submit() async {
         let value = address.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
-            app.showToast("请输入主控地址", kind: .warning)
+            app.showToast("请输入主控地址", kind: BannerKind.warning)
             return
         }
         loading = true
         defer { loading = false }
         do {
             try await app.configureMaster(value)
-            app.showToast("主控地址已保存", kind: .success)
+            app.showToast("主控地址已保存", kind: BannerKind.success)
         } catch {
             app.report(error)
         }
@@ -151,14 +151,14 @@ struct LoginView: View {
 
     private func submit() async {
         guard !account.isEmpty, !password.isEmpty else {
-            app.showToast("请输入账号与密码", kind: .warning)
+            app.showToast("请输入账号与密码", kind: BannerKind.warning)
             return
         }
         loading = true
         defer { loading = false }
         do {
             try await app.login(account: account, password: password)
-            app.showToast("登录成功", kind: .success)
+            app.showToast("登录成功", kind: BannerKind.success)
         } catch {
             app.report(error)
         }
@@ -267,20 +267,20 @@ struct RegisterView: View {
 
     private func submit() async {
         guard username.count >= 3 else {
-            app.showToast("用户名至少 3 位", kind: .warning)
+            app.showToast("用户名至少 3 位", kind: BannerKind.warning)
             return
         }
         guard password.count >= 6 else {
-            app.showToast("密码至少 6 位", kind: .warning)
+            app.showToast("密码至少 6 位", kind: BannerKind.warning)
             return
         }
         guard password == confirm else {
-            app.showToast("两次输入的密码不一致", kind: .warning)
+            app.showToast("两次输入的密码不一致", kind: BannerKind.warning)
             return
         }
         if captchaEnabled {
             guard !captchaInput.trimmingCharacters(in: .whitespaces).isEmpty else {
-                app.showToast("请输入验证码", kind: .warning)
+                app.showToast("请输入验证码", kind: BannerKind.warning)
                 return
             }
         }
@@ -289,7 +289,7 @@ struct RegisterView: View {
         do {
             try await app.register(username: username, password: password, email: email,
                                    captchaToken: captchaToken, captchaInput: captchaInput)
-            app.showToast("注册成功，已自动登录", kind: .success)
+            app.showToast("注册成功，已自动登录", kind: BannerKind.success)
             dismiss()
         } catch {
             app.report(error)
@@ -377,7 +377,7 @@ struct ForgotPasswordView: View {
 
     private func fetchQuestion() async {
         guard !account.isEmpty else {
-            app.showToast("请输入账号", kind: .warning)
+            app.showToast("请输入账号", kind: BannerKind.warning)
             return
         }
         loading = true
@@ -392,11 +392,11 @@ struct ForgotPasswordView: View {
 
     private func reset() async {
         guard !answer.isEmpty else {
-            app.showToast("请输入密保答案", kind: .warning)
+            app.showToast("请输入密保答案", kind: BannerKind.warning)
             return
         }
         guard newPassword.count >= 6 else {
-            app.showToast("新密码至少 6 位", kind: .warning)
+            app.showToast("新密码至少 6 位", kind: BannerKind.warning)
             return
         }
         loading = true
@@ -404,7 +404,7 @@ struct ForgotPasswordView: View {
         do {
             try await APIClient.shared.resetPassword(account: account, answer: answer, newPassword: newPassword)
             done = true
-            app.showToast("密码已重置", kind: .success)
+            app.showToast("密码已重置", kind: BannerKind.success)
         } catch {
             app.report(error)
         }

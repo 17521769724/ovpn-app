@@ -137,7 +137,7 @@ struct HomeView: View {
                         } else {
                             BannerBar(
                                 message: "订阅正常｜限速 \(Format.speed(payload.speedLimitKbps))｜设备上限 \(payload.deviceLimit > 0 ? "\(payload.deviceLimit) 台" : "不限")",
-                                kind: .success
+                                kind: BannerKind.success
                             )
                         }
                     }
@@ -204,15 +204,15 @@ struct HomeView: View {
                 infoPanel(palette)
 
                 if vpn.status == .connected {
-                    AppButton(title: "断开连接", icon: "stop.circle.fill", style: .destructive) {
+                    AppButton(title: "断开连接", icon: "stop.circle.fill", style: AppButton.Style.destructive) {
                         Task { await disconnect() }
                     }
                 } else if vpn.status == .connecting || vpn.status == .reasserting {
-                    AppButton(title: "取消连接", icon: "xmark.circle", style: .outline) {
+                    AppButton(title: "取消连接", icon: "xmark.circle", style: AppButton.Style.outline) {
                         Task { await disconnect() }
                     }
                 } else if vpn.status == .disconnecting {
-                    AppButton(title: "正在断开…", icon: "stop.circle", style: .outline, loading: true) {}
+                    AppButton(title: "正在断开…", icon: "stop.circle", style: AppButton.Style.outline, loading: true) {}
                 }
 
                 Spacer(minLength: 16)
@@ -670,7 +670,7 @@ struct HomeView: View {
                               disabled: !node.supportsIPv4 || connectingFamily == "v6") {
                         Task { await connect(family: "v4") }
                     }
-                    AppButton(title: "IPv6 连接", icon: "6.circle.fill", style: .accent,
+                    AppButton(title: "IPv6 连接", icon: "6.circle.fill", style: AppButton.Style.accent,
                               loading: connectingFamily == "v6",
                               disabled: !node.supportsIPv6 || connectingFamily == "v4") {
                         Task { await connect(family: "v6") }
@@ -695,7 +695,7 @@ struct HomeView: View {
     private func passwordSheet(_ palette: Palette) -> some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
-                BannerBar(message: "连接需要账号密码认证，密码仅保存在本机钥匙串，不会上传。", kind: .info)
+                BannerBar(message: "连接需要账号密码认证，密码仅保存在本机钥匙串，不会上传。", kind: BannerKind.info)
                 AppTextField(title: "账号", placeholder: "", text: .constant(app.user?.username ?? ""))
                 AppTextField(title: "登录密码", placeholder: "请输入登录密码", text: $passwordInput, secure: true)
                 AppButton(title: "保存并连接", icon: "bolt.fill", loading: savingPassword) {
@@ -722,7 +722,7 @@ struct HomeView: View {
     private func confirmPasswordAndConnect() async {
         guard let profile = pendingProfile else { return }
         guard !passwordInput.isEmpty else {
-            app.showToast("请输入登录密码", kind: .warning)
+            app.showToast("请输入登录密码", kind: BannerKind.warning)
             return
         }
         savingPassword = true
@@ -767,7 +767,7 @@ struct HomeView: View {
         guard let node = selectedNode, let line = selectedLine else { return }
         guard connectingFamily == nil else { return }
         guard payload?.quota.valid == true else {
-            app.showToast(payload?.quota.reason.isEmpty == false ? (payload?.quota.reason ?? "") : "当前订阅状态不可用", kind: .warning)
+            app.showToast(payload?.quota.reason.isEmpty == false ? (payload?.quota.reason ?? "") : "当前订阅状态不可用", kind: BannerKind.warning)
             return
         }
 
@@ -815,7 +815,7 @@ struct HomeView: View {
         await vpn.disconnect()
         Haptics.disconnected()
         stopStats()
-        app.showToast("已断开连接", kind: .info)
+        app.showToast("已断开连接", kind: BannerKind.info)
         // 主控侧会话由 VPNManager 在状态落为「已断开」时统一关闭（含系统设置里断开的情况）
     }
 
@@ -828,7 +828,7 @@ struct HomeView: View {
                 attemptActive = false
                 Haptics.connected()
                 let name = vpn.activeServerName
-                app.showToast(name.isEmpty ? "已连接" : "已连接到 \(name)", kind: .success)
+                app.showToast(name.isEmpty ? "已连接" : "已连接到 \(name)", kind: BannerKind.success)
                 resetSessionStats()
             }
             // 系统隧道已提供连接时间（含在系统设置里建立的连接）；缺失时才用本地兜底
@@ -839,7 +839,7 @@ struct HomeView: View {
                 attemptActive = false
                 connectingFamily = nil
                 Haptics.connectFailed()
-                app.showToast("连接失败，请检查账号状态或稍后重试", kind: .error)
+                app.showToast("连接失败，请检查账号状态或稍后重试", kind: BannerKind.error)
                 // 立即拉取账号状态，若存在具体异常（被踢 / 到期 / 超流量）则用更精确的提示覆盖
                 Task { await app.checkStatusNow() }
             }

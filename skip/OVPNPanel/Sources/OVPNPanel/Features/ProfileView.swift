@@ -26,7 +26,7 @@ struct ProfileView: View {
                     sessionCard(palette).id("sessions")
                     menuCard(palette)
 
-                    AppButton(title: "退出登录", icon: "rectangle.portrait.and.arrow.right", style: .destructive) {
+                    AppButton(title: "退出登录", icon: "rectangle.portrait.and.arrow.right", style: AppButton.Style.destructive) {
                         showLogout = true
                     }
                     .padding(.top, 4)
@@ -308,7 +308,7 @@ struct ProfileView: View {
                             AppButton(
                                 title: "全部断开",
                                 icon: "xmark.circle",
-                                style: .secondary,
+                                style: AppButton.Style.secondary,
                                 height: DS.Size.buttonHeightSmall,
                                 loading: closingSessions,
                                 disabled: closingSessions
