@@ -276,6 +276,8 @@ struct AppTextField: View {
 
 struct AppCard<Content: View>: View {
     var padding: CGFloat = DS.Size.cardPadding
+    /// 自定义卡片底色（传 nil 时使用常规卡片色；不可点击的场景使用柔和灰底）
+    var background: Color?
     @ViewBuilder var content: Content
 
     @Environment(\.colorScheme) private var scheme
@@ -285,7 +287,7 @@ struct AppCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) { content }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.card)
+            .background(background ?? palette.card)
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.xl)
                     .stroke(palette.border, lineWidth: 1)
@@ -321,9 +323,9 @@ struct NodeStatusBadge: View {
         let (text, bg, fg): (String, Color, Color) = {
             switch status {
             case "online": return ("在线", palette.onlineBg, palette.onlineText)
-            case "offline": return ("离线", palette.offlineBg, palette.offlineText)
             case "disabled": return ("已停用", palette.pendingBg, palette.pendingText)
-            default: return ("待安装", palette.pendingBg, palette.pendingText)
+            // 离线 / 未对接（pending）统一显示为「离线」，不暴露安装状态
+            default: return ("离线", palette.offlineBg, palette.offlineText)
             }
         }()
         StatusBadge(text: text, background: bg, foreground: fg)

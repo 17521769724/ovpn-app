@@ -117,7 +117,8 @@ struct ServerNode: Decodable, Identifiable {
         switch status {
         case "online": return "在线"
         case "offline": return "离线"
-        case "pending": return "待安装"
+        // 未对接（未安装 Agent）的节点对用户统一按「离线」展示，不暴露安装状态
+        case "pending": return "离线"
         case "disabled": return "已停用"
         default: return status
         }
@@ -142,6 +143,8 @@ struct LinesPayload: Decodable {
     let quota: Quota
     let speedLimitKbps: Int
     let deviceLimit: Int
+    /// 分类顺序（按管理后台排序下发；老版本主控可能不返回）
+    let categories: [String]?
 }
 
 /// 线路配置文件内容（.ovpn 文本，由主控生成）
@@ -254,6 +257,8 @@ struct PlansPayload: Decodable {
     let nodeOnline: Int
     let nodeTotal: Int
     let user: PlanUser?
+    /// 站点可用支付方式（主控下发；老版本主控可能不返回，此时展示全部标准方式）
+    let paymentMethods: [String]?
 
     struct PlanUser: Decodable {
         let level: Int

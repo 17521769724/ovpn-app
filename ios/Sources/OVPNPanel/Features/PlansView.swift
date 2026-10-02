@@ -1,6 +1,26 @@
 import SwiftUI
 import Combine
 
+/// 支付方式（易支付：alipay / wxpay / qqpay）
+private struct PayOption: Identifiable {
+    let id: String
+    let name: String
+    let icon: String
+    let tint: Color
+
+    static let all: [PayOption] = [
+        PayOption(id: "alipay", name: "支付宝", icon: "a.circle.fill", tint: DS.IconColor.cyan),
+        PayOption(id: "wxpay", name: "微信支付", icon: "message.fill", tint: DS.IconColor.green),
+        PayOption(id: "qqpay", name: "QQ 钱包", icon: "q.circle.fill", tint: DS.IconColor.teal),
+    ]
+}
+
+/// 已确认的支付请求：支付方式弹窗关闭后再创建订单，避免与 Safari 弹窗叠加冲突
+private struct PendingPay {
+    let plan: PlanItem
+    let method: String
+}
+
 /// 套餐购买
 struct PlansView: View {
     @EnvironmentObject private var app: AppState
@@ -10,6 +30,10 @@ struct PlansView: View {
     @State private var loading = true
     @State private var paying = false
     @State private var payURL: String?
+    /// 正在选择付款方式的套餐（非空时弹出付款方式选择）
+    @State private var pickerPlan: PlanItem?
+    @State private var selectedMethod = PayOption.all[0].id
+    @State private var pendingPay: PendingPay?
 
     var body: some View {
         let palette = Palette(scheme: scheme)
@@ -41,12 +65,97 @@ struct PlansView: View {
             Haptics.refresh()
             await load()
         }
+        // 付款方式选择：确认后先关闭本弹窗，再创建订单并展示支付页
+        .sheet(item: $pickerPlan, onDismiss: {
+            guard let pending = pendingPay else { return }
+            pendingPay = nil
+            Task { await buy(plan: pending.plan, method: pending.method) }
+        }) { plan in
+            paymentMethodSheet(palette, plan: plan)
+        }
         .sheet(isPresented: Binding(
             get: { payURL != nil },
             set: { if !$0 { payURL = nil } }
-        )) {
+        ), onDismiss: {
+            // 支付页关闭后刷新一次：主控异步回调到账后，套餐状态即刻可见
+            Task { await load() }
+        }) {
             if let payURL, let url = URL(string: payURL) {
                 SafariSheet(url: url) { self.payURL = nil }
+            }
+        }
+    }
+
+    /// 当前站点可用的付款方式（主控下发；缺省展示全部标准方式）
+    private var availablePayOptions: [PayOption] {
+        guard let methods = payload?.paymentMethods, !methods.isEmpty else { return PayOption.all }
+        let list = PayOption.all.filter { methods.contains($0.id) }
+        return list.isEmpty ? PayOption.all : list
+    }
+
+    /// 付款方式选择弹窗：选择后点击「支付」在内置浏览器打开支付页面
+    private func paymentMethodSheet(_ palette: Palette, plan: PlanItem) -> some View {
+        let options = availablePayOptions
+        return VStack(alignment: .leading, spacing: DS.Size.gapLarge) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("选择付款方式")
+                    .font(DS.Font.section)
+                    .foregroundStyle(palette.foreground)
+                Text("\(plan.name) · 应付 \(Format.money(plan.priceCents, symbol: payload?.currencySymbol ?? "¥"))")
+                    .font(DS.Font.bodySmall)
+                    .foregroundStyle(palette.mutedForeground)
+            }
+
+            VStack(spacing: 8) {
+                ForEach(options) { option in
+                    Button {
+                        selectedMethod = option.id
+                    } label: {
+                        HStack(spacing: 10) {
+                            IconTile(icon: option.icon, color: option.tint)
+                            Text(option.name)
+                                .font(DS.Font.body)
+                                .foregroundStyle(palette.foreground)
+                            Spacer(minLength: 8)
+                            Image(systemName: selectedMethod == option.id ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(selectedMethod == option.id ? palette.primary : palette.mutedForeground.opacity(0.5))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(selectedMethod == option.id ? palette.primary.opacity(0.10) : palette.card)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DS.Radius.lg)
+                                .stroke(selectedMethod == option.id ? palette.primary : palette.border, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.98))
+                }
+            }
+
+            AppButton(
+                title: paying ? "正在创建订单…" : "支付 \(Format.money(plan.priceCents, symbol: payload?.currencySymbol ?? "¥"))",
+                icon: "creditcard.fill",
+                style: .primary,
+                loading: paying,
+                disabled: paying
+            ) {
+                pendingPay = PendingPay(plan: plan, method: selectedMethod)
+                pickerPlan = nil
+            }
+
+            Text("点击支付后将打开内置浏览器，在支付页面完成付款")
+                .font(DS.Font.caption)
+                .foregroundStyle(palette.mutedForeground)
+        }
+        .padding(DS.Size.pagePadding)
+        .presentationDetents([.height(400)])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            // 站点可能只支持部分方式：默认选中第一个可用的
+            if !options.contains(where: { $0.id == selectedMethod }) {
+                selectedMethod = options.first?.id ?? "alipay"
             }
         }
     }
@@ -119,7 +228,7 @@ struct PlansView: View {
                             loading: paying,
                             disabled: !(payload?.purchaseEnabled ?? false)
                         ) {
-                            Task { await buy(plan: plan) }
+                            pickerPlan = plan
                         }
                     }
                 } else {
@@ -130,7 +239,7 @@ struct PlansView: View {
                         loading: paying,
                         disabled: !(payload?.purchaseEnabled ?? false)
                     ) {
-                        Task { await buy(plan: plan) }
+                        pickerPlan = plan
                     }
                 }
             }
@@ -148,11 +257,11 @@ struct PlansView: View {
         }
     }
 
-    private func buy(plan: PlanItem) async {
+    private func buy(plan: PlanItem, method: String) async {
         paying = true
         defer { paying = false }
         do {
-            let result = try await APIClient.shared.createOrder(planId: plan.id, method: "alipay")
+            let result = try await APIClient.shared.createOrder(planId: plan.id, method: method)
             if result.paidValue {
                 app.showToast(result.message.isEmpty ? "支付成功" : result.message, kind: .success)
                 await app.refreshUser()

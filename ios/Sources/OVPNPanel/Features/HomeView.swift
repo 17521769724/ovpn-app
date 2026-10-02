@@ -52,6 +52,14 @@ struct HomeView: View {
 
     private var categories: [String] {
         guard let payload else { return ["全部"] }
+        // 分类顺序以主控下发为准（与管理后台的排序一致）；老版本主控未下发时按线路出现顺序兜底
+        if let preset = payload.categories, !preset.isEmpty {
+            var list = ["全部"]
+            for name in preset where !list.contains(name) {
+                list.append(name)
+            }
+            return list
+        }
         var list = ["全部"]
         for line in payload.lines where !list.contains(line.category) {
             list.append(line.category)
@@ -93,7 +101,7 @@ struct HomeView: View {
             await load()
             // 冷启动时隧道可能已由「系统设置」建立：直接进入已连接状态（含计时与实时统计）
             if vpn.status == .connected {
-                if connectedSince == nil { connectedSince = Date() }
+                if sessionStart == nil { connectedSince = Date() }
                 startStats()
             }
         }
@@ -111,7 +119,7 @@ struct HomeView: View {
         }
         // 每秒心跳：仅连接状态页需要驱动计时
         .onReceive(clockTicker) { value in
-            if connectedSince != nil { nowTick = value }
+            if sessionStart != nil { nowTick = value }
         }
         .onDisappear { stopStats() }
     }
@@ -181,8 +189,7 @@ struct HomeView: View {
     private func connectionPage(_ palette: Palette) -> some View {
         ScrollView {
             VStack(spacing: 18) {
-                ConnectRing(status: vpn.status, palette: palette, duration: durationText)
-                    .frame(width: 224, height: 224)
+                ConnectRing(status: vpn.status, palette: palette, duration: durationText, size: 224)
                     .padding(.top, 12)
 
                 // 实时网速 + 本次会话流量
@@ -319,8 +326,8 @@ struct HomeView: View {
     }
 
     private var durationText: String {
-        guard let connectedSince else { return "--:--" }
-        let seconds = max(0, Int(nowTick.timeIntervalSince(connectedSince)))
+        guard let start = sessionStart else { return "--:--" }
+        let seconds = max(0, Int(nowTick.timeIntervalSince(start)))
         let h = seconds / 3600
         let m = (seconds % 3600) / 60
         let s = seconds % 60
@@ -328,6 +335,10 @@ struct HomeView: View {
             ? String(format: "%d:%02d:%02d", h, m, s)
             : String(format: "%02d:%02d", m, s)
     }
+
+    /// 当前会话的起始时间：优先使用系统隧道记录的时间（跨页面 / 冷启动 / 系统设置连接均不重置），
+    /// 仅在系统未提供时回退到主控会话时间或本地记录。
+    private var sessionStart: Date? { vpn.connectedAt ?? connectedSince }
 
     // MARK: - 服务器列表
 
@@ -337,15 +348,27 @@ struct HomeView: View {
                 SectionHeader(title: "选择服务器", subtitle: "显示实时状态与负载，共 \(payload?.nodes.count ?? 0) 台")
                 Spacer()
                 if selectedNode != nil {
-                    Button("返回线路") {
+                    // 非白底按钮：主题色浅底胶囊，明确可点
+                    Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                             showServerPicker = false
                             // 返回线路列表后不再保留已选线路，连接栏收起
                             selectedLineId = nil
                         }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("返回线路")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(palette.primary)
+                        .padding(.horizontal, 12)
+                        .frame(height: DS.Size.buttonHeightSmall)
+                        .background(palette.primary.opacity(0.14))
+                        .clipShape(Capsule())
                     }
-                    .font(DS.Font.caption)
-                    .foregroundStyle(palette.primary)
+                    .buttonStyle(PressableStyle())
                 }
             }
 
@@ -371,7 +394,8 @@ struct HomeView: View {
 
     private func serverCard(_ palette: Palette, node: ServerNode) -> some View {
         let isSelected = node.id == selectedNodeId
-        return AppCard {
+        // 不可用（离线 / 等级不足）：整卡使用不可点击的灰底，弱化展示
+        return AppCard(background: node.usable ? nil : palette.muted) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
                     HStack(spacing: 10) {
@@ -449,7 +473,7 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: DS.Radius.xl)
                 .stroke(isSelected ? palette.primary : Color.clear, lineWidth: 1.5)
         )
-        .opacity(node.usable ? 1 : 0.6)
+        .opacity(node.usable ? 1 : 0.8)
     }
 
     /// 单行地址展示（IPv4 / IPv6）
@@ -796,10 +820,9 @@ struct HomeView: View {
                 let name = vpn.activeServerName
                 app.showToast(name.isEmpty ? "已连接" : "已连接到 \(name)", kind: .success)
                 resetSessionStats()
-            } else if connectedSince == nil {
-                // 连接由系统设置等外部途径建立（App 未发起）：补上会话计时
-                connectedSince = Date()
             }
+            // 系统隧道已提供连接时间（含在系统设置里建立的连接）；缺失时才用本地兜底
+            if sessionStart == nil { connectedSince = Date() }
             startStats()
         case .disconnected:
             if attemptActive {
@@ -820,14 +843,13 @@ struct HomeView: View {
 
     // MARK: - 当前会话的实时网速与流量
 
-    /// 重新连接时清空计数（流量按当前会话统计）
+    /// 重新连接时清空计数（流量按当前会话统计；计时由 VPNManager 持久化的连接时间驱动）
     private func resetSessionStats() {
         sessionRx = 0
         sessionTx = 0
         downSpeed = 0
         upSpeed = 0
         lastSample = nil
-        connectedSince = Date()
     }
 
     /// 轮询主控获取当前会话的流量，换算为实时网速
@@ -888,6 +910,8 @@ private struct ConnectRing: View {
     let palette: Palette
     /// 已连接时长（如 12:34），连接成功后显示在圆环中央
     let duration: String
+    /// 圆环直径（固定尺寸，避免父视图布局差异导致错位）
+    var size: CGFloat = 224
 
     @State private var sweep = false
     @State private var breathe = false
@@ -916,16 +940,19 @@ private struct ConnectRing: View {
     var body: some View {
         ZStack {
             // 外层光晕：持续呼吸，营造「运行中」的光感
+            // 注：仅动画透明度，不做 scaleEffect —— 模糊图层上做缩放动画在真机上
+            // 会因图层锚点异常而出现「特效整体偏移」的问题
             Circle()
                 .stroke(palette.connectionGradient, lineWidth: 18)
-                .blur(radius: 16)
+                .frame(width: size - 26, height: size - 26)
+                .blur(radius: 14)
                 .opacity(isConnected ? (breathe ? 0.55 : 0.30) : (isBusy ? 0.26 : 0.08))
-                .scaleEffect(breathe ? 1.02 : 0.97)
                 .animation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: breathe)
 
             // 底环
             Circle()
                 .stroke(palette.muted, lineWidth: ringWidth)
+                .frame(width: size - ringWidth, height: size - ringWidth)
 
             // 内部柔和径向底色
             Circle()
@@ -935,7 +962,7 @@ private struct ConnectRing: View {
                         center: .center, startRadius: 6, endRadius: 100
                     )
                 )
-                .padding(ringWidth + 2)
+                .frame(width: size - (ringWidth + 2) * 2, height: size - (ringWidth + 2) * 2)
 
             // 渐变主环（缓慢流转；未连接时淡显）
             Circle()
@@ -943,12 +970,14 @@ private struct ConnectRing: View {
                     palette.connectionGradient,
                     style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
                 )
+                .frame(width: size - ringWidth, height: size - ringWidth)
                 .opacity(isConnected ? 1 : (isBusy ? 0.9 : 0.32))
                 .rotationEffect(.degrees(sweep ? 360 : 0))
                 .animation(
                     .linear(duration: isBusy ? 1.6 : 16).repeatForever(autoreverses: false),
                     value: sweep
                 )
+                .id("ring-\(statusKey)")
 
             // 高光彗尾：连接中快速巡游，已连接缓慢扫过
             if isConnected || isBusy {
@@ -961,12 +990,14 @@ private struct ConnectRing: View {
                         ),
                         style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
                     )
+                    .frame(width: size - ringWidth, height: size - ringWidth)
                     .rotationEffect(.degrees(sweep ? 360 : 0))
                     .animation(
                         .linear(duration: isBusy ? 1.3 : 6).repeatForever(autoreverses: false),
                         value: sweep
                     )
                     .opacity(isBusy ? 0.95 : 0.5)
+                    .id("tail-\(statusKey)")
             }
 
             // 中心：已连接显示计时；连接中显示状态
@@ -1001,15 +1032,32 @@ private struct ConnectRing: View {
                 }
             }
         }
+        // 固定尺寸 + 统一合成：避免模糊 / 旋转 / 缩放图层在真机上出现错位、漂移
+        .frame(width: size, height: size)
+        .compositingGroup()
+        .frame(maxWidth: .infinity)
         .onAppear {
             sweep = true
             breathe = true
         }
         .onChange(of: status) { _ in
-            // 状态切换时重新起转，保证速度与状态一致
-            sweep = false
+            // 状态切换：重置旋转动画（瞬时复位，不产生反向旋转位移）
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { sweep = false }
             DispatchQueue.main.async { sweep = true }
             breathe = true
+        }
+    }
+
+    /// 状态标识：用于在状态切换时重建旋转图层，保证动画时长与状态一致
+    private var statusKey: String {
+        switch status {
+        case .connected: return "connected"
+        case .connecting: return "connecting"
+        case .reasserting: return "reasserting"
+        case .disconnecting: return "disconnecting"
+        default: return "idle"
         }
     }
 }

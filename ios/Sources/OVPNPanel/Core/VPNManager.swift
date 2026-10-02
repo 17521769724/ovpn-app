@@ -14,6 +14,8 @@ final class VPNManager: ObservableObject {
 
     @Published private(set) var status: NEVPNStatus = .disconnected
     @Published private(set) var lastError: String?
+    /// 当前会话的连接建立时间（由系统隧道提供，跨页面 / 冷启动 / 系统设置连接均有效）
+    @Published private(set) var connectedAt: Date?
     /// 当前连接使用的服务器 / 线路名称（供「已连接」页展示，页面重建后仍可恢复）
     @Published private(set) var activeServerName: String = ""
     @Published private(set) var activeLineName: String = ""
@@ -22,6 +24,21 @@ final class VPNManager: ObservableObject {
 
     private var manager: NETunnelProviderManager?
     private var observing = false
+
+    /// 连接建立时间持久化：App 被杀/重启后仍能正确显示已连接时长
+    private var storedConnectedAt: Date? {
+        get {
+            let value = UserDefaults.standard.double(forKey: "ovpn.session.connectedAt")
+            return value > 0 ? Date(timeIntervalSince1970: value) : nil
+        }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue.timeIntervalSince1970, forKey: "ovpn.session.connectedAt")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "ovpn.session.connectedAt")
+            }
+        }
+    }
 
     /// 本地是否可能存在未关闭的主控在线会话（连接成功后置位，清理成功后复位）
     private var hasLikelyOpenSession: Bool {
@@ -109,9 +126,23 @@ final class VPNManager: ObservableObject {
             status = .disconnected
         }
 
-        // 连接成功后记录「可能存在在线会话」，供断开后清理主控侧会话使用
+        // 连接建立时间：优先取系统隧道记录的时间（系统设置里建立的连接同样有效），
+        // 并持久化，保证切换页面 / App 重启后计时不重置。
         if status == .connected {
             hasLikelyOpenSession = true
+            let systemDate = manager?.connection.connectedDate
+            if let systemDate {
+                connectedAt = systemDate
+                storedConnectedAt = systemDate
+            } else if let stored = storedConnectedAt {
+                connectedAt = stored
+            } else {
+                connectedAt = Date()
+                storedConnectedAt = connectedAt
+            }
+        } else if status == .disconnected || status == .invalid {
+            if connectedAt != nil { connectedAt = nil }
+            storedConnectedAt = nil
         }
 
         // 从「已连接 / 断开中 / 重连中」落到断开：立刻关闭主控会话（含在系统设置中断开）
