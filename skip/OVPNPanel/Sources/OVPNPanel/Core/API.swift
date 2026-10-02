@@ -53,8 +53,11 @@ final class APIClient {
 
     /// 更新主控地址（统一去掉尾部斜杠）
     func setBaseURL(_ url: String) {
-        baseURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "/+$", with: "", options: .regularExpression)
+        var trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        while trimmed.hasSuffix("/") {
+            trimmed.removeLast()
+        }
+        baseURL = trimmed
     }
 
     var currentBaseURL: String { baseURL }
