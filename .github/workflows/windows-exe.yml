@@ -60,6 +60,10 @@ jobs:
             if (!(Test-Path $out)) { throw "[$($s.n)] 未生成截图 $out" }
             Write-Host "[$($s.n)] ok exit=$($p.ExitCode) size=$((Get-Item $out).Length)"
           }
+          Write-Host "===== trace.log ====="
+          Get-Content "out/smoke/trace.log" -ErrorAction SilentlyContinue | Write-Host
+          Write-Host "===== crash.log ====="
+          Get-Content "out/smoke/crash.log" -ErrorAction SilentlyContinue | Write-Host
           Get-ChildItem win-*.png | Format-Table Name, Length
 
       - name: 构建 Release（requireAdministrator 正式版）

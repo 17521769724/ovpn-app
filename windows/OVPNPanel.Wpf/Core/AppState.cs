@@ -170,9 +170,25 @@ namespace OVPNPanel.Core
                 {
                     Task.Run(async () =>
                     {
-                        try { await Login(parts[0], parts[1]).ConfigureAwait(false); } catch { }
+                        try
+                        {
+                            await Login(parts[0], parts[1]).ConfigureAwait(false);
+                            OVPNPanel.Program.Trace("autologin:ok");
+                        }
+                        catch (Exception error)
+                        {
+                            OVPNPanel.Program.Trace("autologin:fail " + error.Message);
+                        }
                     });
                 }
+                else
+                {
+                    OVPNPanel.Program.Trace("autologin:bad-arg");
+                }
+            }
+            else
+            {
+                OVPNPanel.Program.Trace("autologin:absent");
             }
         }
 
