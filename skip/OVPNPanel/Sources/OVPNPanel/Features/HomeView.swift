@@ -696,7 +696,7 @@ struct HomeView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
                 BannerBar(message: "连接需要账号密码认证，密码仅保存在本机钥匙串，不会上传。", kind: BannerKind.info)
-                AppTextField(title: "账号", placeholder: "", text: .constant(app.user?.username ?? ""))
+                AppTextField(title: "账号", placeholder: "", text: Binding.constant(app.user?.username ?? ""))
                 AppTextField(title: "登录密码", placeholder: "请输入登录密码", text: $passwordInput, secure: true)
                 AppButton(title: "保存并连接", icon: "bolt.fill", loading: savingPassword) {
                     Task { await confirmPasswordAndConnect() }
