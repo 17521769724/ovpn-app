@@ -112,6 +112,49 @@ namespace OVPNPanel
             OVPNPanel.Program.Trace("window:ready");
         }
 
+        /// <summary>CI 截图用：-shot &lt;路径&gt; 时把窗口内容渲染为 PNG 后退出</summary>
+        protected override void OnContentRendered(EventArgs e)
+        {
+            base.OnContentRendered(e);
+            var shot = LaunchArgs.Value("-shot");
+            if (string.IsNullOrEmpty(shot)) return;
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(2000),
+            };
+            timer.Tick += (s, args) =>
+            {
+                timer.Stop();
+                CaptureTo(shot);
+                Application.Current.Shutdown();
+            };
+            timer.Start();
+        }
+
+        void CaptureTo(string path)
+        {
+            try
+            {
+                int w = (int)Math.Ceiling(ActualWidth);
+                int h = (int)Math.Ceiling(ActualHeight);
+                if (w <= 0 || h <= 0) return;
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    w, h, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(this);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using (var stream = System.IO.File.Create(path))
+                {
+                    encoder.Save(stream);
+                }
+                OVPNPanel.Program.Trace("window:shot " + path);
+            }
+            catch (Exception error)
+            {
+                OVPNPanel.Program.LogCrash(error);
+            }
+        }
+
         /// <summary>CI 截图用：-winSize 420,700 指定窗口尺寸（正常启动不生效）</summary>
         void ApplyWindowSizeOverride()
         {

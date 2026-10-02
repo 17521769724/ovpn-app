@@ -28,38 +28,29 @@ jobs:
       - name: 构建界面自检版（asInvoker，免 UAC）
         run: dotnet build "$env:PROJ" -c Release -p:CiSmoke=true -o out/smoke
 
-      - name: 启动并截图
+      - name: 启动并截图（窗口自渲染）
         continue-on-error: true
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.Windows.Forms
-          Add-Type -AssemblyName System.Drawing
           $exe = (Resolve-Path "out/smoke/OVPNPanel.exe").Path
-
-          function Shot([string]$name, [string[]]$args) {
-            $p = Start-Process -FilePath $exe -ArgumentList $args -PassThru
-            Start-Sleep -Seconds 6
-            if ($p.HasExited) {
-              $trace = "out/smoke/trace.log"
-              if (Test-Path $trace) { Write-Host "===== trace.log ($name) ====="; Get-Content $trace | Write-Host }
-              $log = "out/smoke/crash.log"
-              if (Test-Path $log) { Write-Host "===== crash.log ($name) ====="; Get-Content $log | Write-Host }
-              throw "[$name] 启动即退出，exit=$($p.ExitCode)"
+          $shots = @(
+            @{ n = "setup"; a = @("-winSize","430,700","-theme","light") },
+            @{ n = "tab0";  a = @("-demo","-startTab","0","-winSize","430,700","-theme","light") },
+            @{ n = "tab1";  a = @("-demo","-startTab","1","-winSize","430,700","-theme","light") },
+            @{ n = "tab2";  a = @("-demo","-startTab","2","-winSize","430,700","-theme","light") },
+            @{ n = "tab3";  a = @("-demo","-startTab","3","-winSize","430,700","-theme","light") }
+          )
+          foreach ($s in $shots) {
+            $out = (Join-Path $PWD ("win-" + $s.n + ".png"))
+            $p = Start-Process -FilePath $exe -ArgumentList ($s.a + @("-shot", $out)) -PassThru
+            if (!$p.WaitForExit(30000)) {
+              Write-Host "[$($s.n)] 超时未退出，强制结束"
+              $p | Stop-Process -Force
             }
-            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-            $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
-            $g = [System.Drawing.Graphics]::FromImage($bmp)
-            $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-            $bmp.Save("$PWD/win-$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
-            $g.Dispose(); $bmp.Dispose()
-            Write-Host "[$name] ok, alive=$(-not $p.HasExited)"
-            $p | Stop-Process -Force
-            Start-Sleep -Seconds 1
-          }
-
-          Shot "setup" @("-winSize","430,700","-theme","light")
-          for ($tab = 0; $tab -le 3; $tab++) {
-            Shot "tab$tab" @("-demo","-startTab","$tab","-winSize","430,700","-theme","light")
+            if (!(Test-Path $out)) { throw "[$($s.n)] 未生成截图 $out" }
+            Write-Host "[$($s.n)] ok exit=$($p.ExitCode) size=$((Get-Item $out).Length)"
+            $trace = "out/smoke/trace.log"
+            if (Test-Path $trace) { Get-Content $trace -Tail 3 | Write-Host }
           }
           Get-ChildItem win-*.png | Format-Table Name, Length
 
