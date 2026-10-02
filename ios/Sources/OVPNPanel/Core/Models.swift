@@ -259,6 +259,8 @@ struct PlansPayload: Decodable {
     let user: PlanUser?
     /// 站点可用支付方式（主控下发；老版本主控可能不返回，此时展示全部标准方式）
     let paymentMethods: [String]?
+    /// 可选支付接口（主控下发；先选接口再选该接口支持的支付方式）
+    let paymentChannels: [PaymentChannelItem]?
 
     struct PlanUser: Decodable {
         let level: Int
@@ -266,6 +268,14 @@ struct PlansPayload: Decodable {
         let balanceCents: Int
         let balanceYuan: Double
     }
+}
+
+/// 支付接口（管理后台配置的启用中通道）
+struct PaymentChannelItem: Decodable, Identifiable {
+    let id: Int
+    let name: String
+    /// 该接口支持的支付方式（alipay / wxpay / qqpay）
+    let methods: [String]?
 }
 
 struct OrderItem: Decodable, Identifiable {

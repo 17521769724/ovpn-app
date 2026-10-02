@@ -152,11 +152,20 @@ extension APIClient {
     }
 
     func createOrder(planId: Int, method: String,
-                     useCoins: Bool = false, payWithBalance: Bool = false) async throws -> CreateOrderPayload {
+                     useCoins: Bool = false, payWithBalance: Bool = false,
+                     channelId: Int? = nil) async throws -> CreateOrderPayload {
         var body: [String: Any] = ["plan_id": planId, "method": method]
         if useCoins { body["use_coins"] = true }
         if payWithBalance { body["pay_with_balance"] = true }
+        if let channelId { body["channel_id"] = channelId }
         return try await request("/api/v1/orders", method: "POST", body: body, as: CreateOrderPayload.self)
+    }
+
+    /// 余额充值：创建充值订单并返回支付跳转地址（在内置浏览器打开）
+    func rechargeBalance(amountYuan: Double, method: String, channelId: Int?) async throws -> CreateOrderPayload {
+        var body: [String: Any] = ["amount_yuan": amountYuan, "method": method]
+        if let channelId { body["channel_id"] = channelId }
+        return try await request("/api/v1/orders/recharge", method: "POST", body: body, as: CreateOrderPayload.self)
     }
 
     /// 继续支付（复用原订单，不再新建订单）

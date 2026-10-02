@@ -420,7 +420,9 @@ struct HomeView: View {
                 }
 
                 // 已配置的 IPv4 / IPv6 地址（两者都配置时同时展示）
-                if node.displayIPv4 != nil || node.displayIPv6 != nil {
+                // 服务器离线时隐藏地址（IPv4 / IPv6 均不显示，避免暴露不可达的地址）
+                let showAddress = node.status == "online"
+                if showAddress, node.displayIPv4 != nil || node.displayIPv6 != nil {
                     VStack(spacing: 5) {
                         if let v4 = node.displayIPv4 {
                             addressRow(palette, label: "IPv4", value: v4, color: DS.IconColor.green)
@@ -512,21 +514,24 @@ struct HomeView: View {
                     IconTile(icon: "server.rack", color: DS.IconColor.green, size: 38)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(node.name).font(DS.Font.section).foregroundStyle(palette.foreground)
-                        HStack(spacing: 6) {
-                            if let v4 = node.displayIPv4 {
-                                Text(v4)
-                                    .font(DS.Font.caption)
-                                    .foregroundStyle(palette.mutedForeground)
-                                    .lineLimit(1).truncationMode(.middle)
-                            }
-                            if node.displayIPv4 != nil && node.displayIPv6 != nil {
-                                VLine(height: 9)
-                            }
-                            if let v6 = node.displayIPv6 {
-                                Text(v6)
-                                    .font(DS.Font.caption)
-                                    .foregroundStyle(palette.mutedForeground)
-                                    .lineLimit(1).truncationMode(.middle)
+                        // 离线服务器不展示地址（IPv4 / IPv6 都隐藏）
+                        if node.status == "online" {
+                            HStack(spacing: 6) {
+                                if let v4 = node.displayIPv4 {
+                                    Text(v4)
+                                        .font(DS.Font.caption)
+                                        .foregroundStyle(palette.mutedForeground)
+                                        .lineLimit(1).truncationMode(.middle)
+                                }
+                                if node.displayIPv4 != nil && node.displayIPv6 != nil {
+                                    VLine(height: 9)
+                                }
+                                if let v6 = node.displayIPv6 {
+                                    Text(v6)
+                                        .font(DS.Font.caption)
+                                        .foregroundStyle(palette.mutedForeground)
+                                        .lineLimit(1).truncationMode(.middle)
+                                }
                             }
                         }
                     }
@@ -557,17 +562,23 @@ struct HomeView: View {
             }
 
             if categories.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(categories, id: \.self) { item in
-                            ChipButton(title: item, selected: item == category) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { category = item }
-                            }
-                            // 「全部」与其余分类之间用竖线分隔
-                            if item == "全部" && categories.count > 1 {
-                                VLine(height: 16)
+                // 「全部」与竖线固定在左侧不参与滑动，其余分类单独横向滚动
+                HStack(spacing: 8) {
+                    ChipButton(title: "全部", selected: category == "全部") {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { category = "全部" }
+                    }
+                    VLine(height: 16)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(categories.dropFirst()), id: \.self) { item in
+                                ChipButton(title: item, selected: item == category) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { category = item }
+                                }
                             }
                         }
+                        // 左右留出少量内边距，滚动时首尾分类不贴边
+                        .padding(.horizontal, 1)
                     }
                 }
             }
@@ -939,14 +950,17 @@ private struct ConnectRing: View {
 
     var body: some View {
         ZStack {
-            // 外层光晕：持续呼吸，营造「运行中」的光感
-            // 注：仅动画透明度，不做 scaleEffect —— 模糊图层上做缩放动画在真机上
-            // 会因图层锚点异常而出现「特效整体偏移」的问题
+            // 外层光晕：用两层低透明度粗描边模拟柔光（不使用 blur —— 模糊图层在真机上
+            // 会出现离屏渲染杂色 / 残影，表现为圆环旁出现莫名色块）
+            Circle()
+                .stroke(palette.connectionGradient, lineWidth: 30)
+                .frame(width: size - 44, height: size - 44)
+                .opacity(glowOpacity * 0.45)
+                .animation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: breathe)
             Circle()
                 .stroke(palette.connectionGradient, lineWidth: 18)
-                .frame(width: size - 26, height: size - 26)
-                .blur(radius: 14)
-                .opacity(isConnected ? (breathe ? 0.55 : 0.30) : (isBusy ? 0.26 : 0.08))
+                .frame(width: size - 40, height: size - 40)
+                .opacity(glowOpacity * 0.6)
                 .animation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: breathe)
 
             // 底环
@@ -977,16 +991,15 @@ private struct ConnectRing: View {
                     .linear(duration: isBusy ? 1.6 : 16).repeatForever(autoreverses: false),
                     value: sweep
                 )
-                .id("ring-\(statusKey)")
 
             // 高光彗尾：连接中快速巡游，已连接缓慢扫过
             if isConnected || isBusy {
                 Circle()
                     .trim(from: 0, to: 0.14)
                     .stroke(
-                        AngularGradient(
-                            colors: [.white.opacity(0), .white.opacity(0.9), .white.opacity(0)],
-                            center: .center
+                        LinearGradient(
+                            colors: [.white.opacity(0), .white.opacity(0.85)],
+                            startPoint: .top, endPoint: .bottom
                         ),
                         style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
                     )
@@ -996,8 +1009,7 @@ private struct ConnectRing: View {
                         .linear(duration: isBusy ? 1.3 : 6).repeatForever(autoreverses: false),
                         value: sweep
                     )
-                    .opacity(isBusy ? 0.95 : 0.5)
-                    .id("tail-\(statusKey)")
+                    .opacity(isBusy ? 0.9 : 0.45)
             }
 
             // 中心：已连接显示计时；连接中显示状态
@@ -1032,9 +1044,10 @@ private struct ConnectRing: View {
                 }
             }
         }
-        // 固定尺寸 + 统一合成：避免模糊 / 旋转 / 缩放图层在真机上出现错位、漂移
+        // 固定尺寸 + 裁剪：所有子图层（光晕 / 旋转渐变环 / 彗尾）都收在本帧内，
+        // 任何越界绘制都会被裁掉，避免真机上出现「圆环旁边莫名色块 / 杂色」
         .frame(width: size, height: size)
-        .compositingGroup()
+        .clipped()
         .frame(maxWidth: .infinity)
         .onAppear {
             sweep = true
@@ -1050,14 +1063,10 @@ private struct ConnectRing: View {
         }
     }
 
-    /// 状态标识：用于在状态切换时重建旋转图层，保证动画时长与状态一致
-    private var statusKey: String {
-        switch status {
-        case .connected: return "connected"
-        case .connecting: return "connecting"
-        case .reasserting: return "reasserting"
-        case .disconnecting: return "disconnecting"
-        default: return "idle"
-        }
+    /// 外层光晕透明度（呼吸动画的取值区间）
+    private var glowOpacity: Double {
+        if isConnected { return breathe ? 0.9 : 0.5 }
+        if isBusy { return breathe ? 0.6 : 0.35 }
+        return 0.16
     }
 }

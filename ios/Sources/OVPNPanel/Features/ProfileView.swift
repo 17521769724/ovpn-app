@@ -336,6 +336,10 @@ struct ProfileView: View {
                 menuRow(palette, icon: "ticket.fill", color: DS.IconColor.amber, title: "激活码",
                         destination: AnyView(ActivationView().environmentObject(app)))
                 divider(palette)
+                menuRow(palette, icon: "wallet.pass.fill", color: DS.IconColor.green, title: "余额充值",
+                        subtitle: "充值后可在购买套餐时全额抵扣",
+                        destination: AnyView(RechargeView().environmentObject(app)))
+                divider(palette)
                 menuRow(palette, icon: "bitcoinsign.circle.fill", color: DS.IconColor.orange, title: "金币记录",
                         destination: AnyView(CoinsView().environmentObject(app)))
                 divider(palette)
