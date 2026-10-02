@@ -16,6 +16,7 @@ struct OVPNPanelApp: App {
 struct RootView: View {
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         let palette = Palette(scheme: scheme)
@@ -34,6 +35,14 @@ struct RootView: View {
         }
         // 全局统一导航色调：返回按钮 / 链接使用主题绿，不使用黑色或系统蓝
         .tint(palette.primary)
+        // 冷启动：同步系统 VPN 状态，并补偿清理上次遗留的主控在线会话
+        .task { await VPNManager.shared.refreshStatus() }
+        // 回到前台：重新同步系统 VPN 状态（在「设置」里连接/断开也能正确反映到 App）
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                Task { await VPNManager.shared.refreshStatus() }
+            }
+        }
     }
 }
 
@@ -42,7 +51,7 @@ struct MainTabView: View {
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
 
-    @State private var tab: Int = 0
+    @State private var tab: Int = LaunchArgs.startTab
 
     private let items: [(icon: String, activeIcon: String, title: String, color: Color)] = [
         ("bolt.horizontal.circle", "bolt.horizontal.circle.fill", "线路", DS.IconColor.green),

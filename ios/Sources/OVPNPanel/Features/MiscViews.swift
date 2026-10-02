@@ -438,7 +438,6 @@ struct InviteView: View {
     @Environment(\.colorScheme) private var scheme
 
     @State private var payload: CoinsPayload?
-    @State private var loading = true
     @State private var copiedCode = false
     @State private var copiedLink = false
 
@@ -448,16 +447,13 @@ struct InviteView: View {
             VStack(spacing: DS.Size.gapLarge) {
                 hero(palette)
 
-                if let payload {
-                    if payload.inviteEnabled {
-                        codeCard(palette, payload: payload)
-                        rewardCard(palette, payload: payload)
-                        tipCard(palette)
-                    } else {
-                        BannerBar(message: "站点当前已关闭邀请奖励", kind: .warning)
-                    }
-                } else if loading {
-                    LoadingBlock(text: "正在获取邀请信息…")
+                if payload?.inviteEnabled == false {
+                    BannerBar(message: "站点当前已关闭邀请奖励", kind: .warning)
+                } else {
+                    // 固定结构：数据未就绪时先以占位展示，加载完成后仅数值变化，页面不跳动
+                    codeCard(palette, payload: payload)
+                    rewardCard(palette, payload: payload)
+                    tipCard(palette)
                 }
             }
             .padding(.horizontal, DS.Size.pagePadding)
@@ -507,68 +503,76 @@ struct InviteView: View {
         }
     }
 
-    private func codeCard(_ palette: Palette, payload: CoinsPayload) -> some View {
-        AppCard {
+    private func codeCard(_ palette: Palette, payload: CoinsPayload?) -> some View {
+        let code = payload?.inviteCode ?? ""
+        let urlString = payload?.inviteUrl ?? ""
+        return AppCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     IconTile(icon: "number.square.fill", color: DS.IconColor.teal)
                     SectionHeader(title: "我的邀请码", subtitle: "分享给好友即可参与")
                 }
                 HStack {
-                    Text(payload.inviteCode)
+                    Text(code.isEmpty ? "------" : code)
                         .font(.system(size: 20, weight: .bold, design: .monospaced))
                         .foregroundStyle(palette.foreground)
                         .textSelection(.enabled)
                     Spacer()
                     AppButton(title: copiedCode ? "已复制" : "复制", icon: copiedCode ? "checkmark" : "doc.on.doc",
-                              style: .secondary, height: DS.Size.buttonHeightSmall) {
-                        UIPasteboard.general.string = payload.inviteCode
+                              style: .secondary, height: DS.Size.buttonHeightSmall,
+                              disabled: code.isEmpty) {
+                        UIPasteboard.general.string = code
                         copiedCode = true
                         app.showToast("邀请码已复制", kind: .success)
                     }
                     .frame(width: 104)
                 }
 
-                if !payload.inviteUrl.isEmpty {
-                    Divider().overlay(palette.border)
-                    Text("邀请链接")
-                        .font(DS.Font.caption)
-                        .foregroundStyle(palette.mutedForeground)
-                    Text(payload.inviteUrl)
-                        .font(DS.Font.caption)
-                        .foregroundStyle(palette.secondaryText)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
-                    HStack(spacing: 10) {
-                        AppButton(title: copiedLink ? "已复制" : "复制链接",
-                                  icon: "link", style: .secondary,
-                                  height: DS.Size.buttonHeightSmall) {
-                            UIPasteboard.general.string = payload.inviteUrl
-                            copiedLink = true
-                            app.showToast("邀请链接已复制", kind: .success)
-                        }
-                        if let url = URL(string: payload.inviteUrl) {
-                            ShareLink(item: url) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "square.and.arrow.up")
-                                        .font(.system(size: 13, weight: .semibold))
-                                    Text("分享").font(.system(size: 14, weight: .semibold))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: DS.Size.buttonHeightSmall)
-                                .foregroundStyle(.white)
-                                .background(palette.accentGradient)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-                            }
+                Divider().overlay(palette.border)
+                Text("邀请链接")
+                    .font(DS.Font.caption)
+                    .foregroundStyle(palette.mutedForeground)
+                Text(urlString.isEmpty ? "正在获取邀请链接…" : urlString)
+                    .font(DS.Font.caption)
+                    .foregroundStyle(palette.secondaryText)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                HStack(spacing: 10) {
+                    AppButton(title: copiedLink ? "已复制" : "复制链接",
+                              icon: "link", style: .secondary,
+                              height: DS.Size.buttonHeightSmall,
+                              disabled: urlString.isEmpty) {
+                        UIPasteboard.general.string = urlString
+                        copiedLink = true
+                        app.showToast("邀请链接已复制", kind: .success)
+                    }
+                    if !urlString.isEmpty, let url = URL(string: urlString) {
+                        ShareLink(item: url) { shareLabel(palette) }
                             .buttonStyle(PressableStyle())
-                        }
+                    } else {
+                        // 未就绪时占位（保持布局稳定，不可点击）
+                        shareLabel(palette).opacity(0.45)
                     }
                 }
             }
         }
     }
 
-    private func rewardCard(_ palette: Palette, payload: CoinsPayload) -> some View {
+    /// 分享按钮外观（供 ShareLink 与占位共用）
+    private func shareLabel(_ palette: Palette) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 13, weight: .semibold))
+            Text("分享").font(.system(size: 14, weight: .semibold))
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: DS.Size.buttonHeightSmall)
+        .foregroundStyle(.white)
+        .background(palette.accentGradient)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+    }
+
+    private func rewardCard(_ palette: Palette, payload: CoinsPayload?) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
@@ -576,11 +580,11 @@ struct InviteView: View {
                     SectionHeader(title: "奖励规则")
                 }
                 rewardRow(palette, icon: "person.fill.checkmark", title: "邀请人奖励",
-                          value: "\(payload.inviteRewardCoins) 金币", color: DS.IconColor.green)
+                          value: "\(payload?.inviteRewardCoins ?? 0) 金币", color: DS.IconColor.green)
                 rewardRow(palette, icon: "person.fill.badge.plus", title: "被邀请人奖励",
-                          value: "\(payload.inviteeRewardCoins) 金币", color: DS.IconColor.cyan)
+                          value: "\(payload?.inviteeRewardCoins ?? 0) 金币", color: DS.IconColor.cyan)
                 rewardRow(palette, icon: "sparkles", title: "新用户注册赠送",
-                          value: "\(payload.registerCoins) 金币", color: DS.IconColor.teal)
+                          value: "\(payload?.registerCoins ?? 0) 金币", color: DS.IconColor.teal)
             }
         }
     }
@@ -604,8 +608,6 @@ struct InviteView: View {
     }
 
     private func load() async {
-        loading = true
-        defer { loading = false }
         do {
             payload = try await APIClient.shared.fetchCoins()
         } catch {

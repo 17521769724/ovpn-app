@@ -197,10 +197,12 @@ struct VLine: View {
 }
 
 /// 分段切换（流量 近 7 天 / 近 15 天）
-/// 采用内容自适应宽度 + fixedSize，保证「近15天」等较长文案完整显示不被截断
+/// 固定分段宽度 + 固定字重 + 无位移动画：文字不可能被压缩/截断（避免「近15天」显示成「15」）
 struct SegmentedTabs: View {
     let items: [String]
     @Binding var selection: Int
+    /// 每个分段的固定宽度（按最长文案留足空间）
+    var segmentWidth: CGFloat = 82
 
     @Environment(\.colorScheme) private var scheme
 
@@ -209,25 +211,20 @@ struct SegmentedTabs: View {
         HStack(spacing: 2) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selection = index }
+                    selection = index
                 } label: {
                     Text(item)
-                        .font(.system(size: 12, weight: selection == index ? .semibold : .regular))
-                        .fixedSize()
-                        .padding(.horizontal, 11)
-                        .frame(height: 26)
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(selection == index ? palette.primary : palette.mutedForeground)
+                        .frame(width: segmentWidth, height: 28)
                         .background(
-                            Group {
-                                if selection == index {
-                                    RoundedRectangle(cornerRadius: DS.Radius.sm)
-                                        .fill(palette.card)
-                                        .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
-                                }
-                            }
+                            RoundedRectangle(cornerRadius: DS.Radius.sm)
+                                .fill(selection == index ? palette.card : Color.clear)
+                                .shadow(color: .black.opacity(selection == index ? 0.08 : 0), radius: 3, y: 1)
                         )
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(PressableStyle(scale: 0.94))
+                .buttonStyle(PressableStyle(scale: 0.96))
             }
         }
         .padding(2)
@@ -604,7 +601,7 @@ struct MenuRow: View {
                 .foregroundStyle(palette.mutedForeground.opacity(0.8))
         }
         .padding(.horizontal, DS.Size.cardPadding)
-        .frame(minHeight: 54)
+        .frame(height: 58)
         .contentShape(Rectangle())
     }
 }

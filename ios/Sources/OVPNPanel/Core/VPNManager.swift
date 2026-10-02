@@ -23,6 +23,14 @@ final class VPNManager: ObservableObject {
     private var manager: NETunnelProviderManager?
     private var observing = false
 
+    /// 本地是否可能存在未关闭的主控在线会话（连接成功后置位，清理成功后复位）
+    private var hasLikelyOpenSession: Bool {
+        get { UserDefaults.standard.bool(forKey: "ovpn.session.likelyOpen") }
+        set { UserDefaults.standard.set(newValue, forKey: "ovpn.session.likelyOpen") }
+    }
+    /// 最近一次会话清理时间（节流，避免重复请求）
+    private var lastSessionCleanupAt: Date?
+
     private init() {}
 
     /// 开始监听系统 VPN 状态变化（首次进入线路页时调用）
@@ -69,6 +77,18 @@ final class VPNManager: ObservableObject {
         syncStatus()
     }
 
+    /// App 回到前台 / 冷启动时调用：重新读取系统隧道状态，
+    /// 并补偿清理「后台期间在系统设置里断开」遗留的主控在线会话。
+    @MainActor
+    func refreshStatus() async {
+        startObserving()
+        manager = try? await loadManager()
+        syncStatus()
+        if status == .disconnected || status == .invalid {
+            await cleanupRemoteSessionsIfNeeded()
+        }
+    }
+
     private func loadManager() async throws -> NETunnelProviderManager? {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
         return managers.first {
@@ -78,15 +98,37 @@ final class VPNManager: ObservableObject {
     }
 
     private func syncStatus() {
-        guard let manager else {
+        let previous = status
+        if let manager {
+            status = manager.connection.status
+            // 页面重建后从隧道配置恢复服务器 / 线路名称（标题格式：服务器 ｜ 线路）
+            if activeServerName.isEmpty, let title = manager.localizedDescription {
+                applyTitle(title)
+            }
+        } else {
             status = .disconnected
-            return
         }
-        status = manager.connection.status
-        // 页面重建后从隧道配置恢复服务器 / 线路名称（标题格式：服务器 ｜ 线路）
-        if activeServerName.isEmpty, let title = manager.localizedDescription {
-            applyTitle(title)
+
+        // 连接成功后记录「可能存在在线会话」，供断开后清理主控侧会话使用
+        if status == .connected {
+            hasLikelyOpenSession = true
         }
+
+        // 从「已连接 / 断开中 / 重连中」落到断开：立刻关闭主控会话（含在系统设置中断开）
+        let wasActive = previous == .connected || previous == .disconnecting || previous == .reasserting
+        if (status == .disconnected || status == .invalid) && wasActive {
+            Task { await cleanupRemoteSessionsIfNeeded(force: true) }
+        }
+    }
+
+    /// 关闭主控侧在线会话（节流 30s；force 时忽略节流）。
+    /// 仅在本地记录过「可能存在会话」时调用，避免误伤同账号其他设备。
+    private func cleanupRemoteSessionsIfNeeded(force: Bool = false) async {
+        guard hasLikelyOpenSession else { return }
+        if !force, let last = lastSessionCleanupAt, Date().timeIntervalSince(last) < 30 { return }
+        lastSessionCleanupAt = Date()
+        try? await APIClient.shared.closeSessions()
+        hasLikelyOpenSession = false
     }
 
     /// 解析「服务器 ｜ 线路」标题（兼容旧版本的 " · " 分隔）

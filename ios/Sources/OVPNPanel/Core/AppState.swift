@@ -1,6 +1,21 @@
 import Foundation
 import SwiftUI
 
+/// 启动参数（仅供 CI 自动化界面检查 / 本地调试使用，正常启动不带参数时完全不生效）
+enum LaunchArgs {
+    static func value(_ key: String) -> String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: key), index + 1 < args.count else { return nil }
+        return args[index + 1]
+    }
+
+    /// 启动后直接展示的 Tab（0 线路 / 1 套餐 / 2 邀请 / 3 我的）
+    static var startTab: Int {
+        guard let raw = value("-startTab"), let value = Int(raw) else { return 0 }
+        return max(0, min(3, value))
+    }
+}
+
 /// 全局应用状态：主控地址、登录态、用户信息、全局横幅提示
 @MainActor
 final class AppState: ObservableObject {
@@ -24,6 +39,7 @@ final class AppState: ObservableObject {
 
     init() {
         restore()
+        applyLaunchOverrides()
     }
 
     private func restore() {
@@ -40,6 +56,21 @@ final class AppState: ObservableObject {
             }
         } else {
             phase = .setup
+        }
+    }
+
+    /// 启动参数覆盖（CI 界面检查）：-masterURL / -autoLogin user:pass
+    private func applyLaunchOverrides() {
+        guard let rawURL = LaunchArgs.value("-masterURL"), !rawURL.isEmpty else { return }
+        let normalized = normalize(rawURL)
+        masterURL = normalized
+        LocalStore.masterURL = normalized
+        api.setBaseURL(normalized)
+        phase = .auth
+        if let credentials = LaunchArgs.value("-autoLogin") {
+            let parts = credentials.split(separator: ":", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { return }
+            Task { try? await login(account: parts[0], password: parts[1]) }
         }
     }
 

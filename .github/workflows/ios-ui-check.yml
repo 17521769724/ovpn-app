@@ -1,0 +1,107 @@
+name: ios-ui-check
+
+# 自动化界面检查：在 macOS 运行器的 iOS 模拟器中安装并启动 App，
+# 连接本地模拟主控后对各 Tab 截图，产物为 ui-screenshots（用于人工/AI 检查界面问题）。
+# 手动触发：Actions → ios-ui-check → Run workflow
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ui-check:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成 Xcode 工程
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: 解析 Swift 包依赖
+        working-directory: ios
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project OVPNPanel.xcodeproj -scheme OVPNPanel 2>&1 | tail -5
+
+      - name: 构建模拟器包（不签名）
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project OVPNPanel.xcodeproj \
+            -scheme OVPNPanel \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-sim \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tail -30
+
+      - name: 启动模拟器并安装 App
+        working-directory: ios
+        run: |
+          set -e
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          data=json.load(sys.stdin)['devices']
+          for runtime in sorted(data, reverse=True):
+              for d in data[runtime]:
+                  if d.get('isAvailable') and 'iPhone' in d['name']:
+                      print(d['udid']); raise SystemExit
+          raise SystemExit('no iphone simulator')
+          ")
+          echo "使用模拟器: $DEVICE"
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          APP="$(find build-sim/Build/Products -maxdepth 1 -name '*.app' | head -1)"
+          echo "安装: $APP"
+          xcrun simctl install "$DEVICE" "$APP"
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "BUNDLE_ID=com.ovpn.panel" >> "$GITHUB_ENV"
+
+      - name: 启动模拟主控
+        run: |
+          python3 .github/ui-check/mock_master.py > /tmp/mock.log 2>&1 &
+          sleep 2
+          curl -sf http://127.0.0.1:8788/api/v1/lines > /dev/null && echo "模拟主控就绪"
+
+      - name: 截图各页面
+        run: |
+          set -e
+          mkdir -p shots
+
+          # 1) 首次启动（未配置主控）→ 配置页
+          xcrun simctl launch "$DEVICE" "$BUNDLE_ID" > /dev/null
+          sleep 5
+          xcrun simctl io "$DEVICE" screenshot shots/00-setup.png
+          xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" || true
+
+          # 2) 连接模拟主控并自动登录，逐个 Tab 截图
+          for tab in 0 1 2 3; do
+            xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" 2>/dev/null || true
+            xcrun simctl launch "$DEVICE" "$BUNDLE_ID" \
+              -masterURL http://127.0.0.1:8788 \
+              -autoLogin demo:demo \
+              -startTab "$tab" > /dev/null
+            sleep 8
+            xcrun simctl io "$DEVICE" screenshot "shots/1${tab}-tab${tab}.png"
+          done
+
+          # 3) 我的页面：切换「近15天」后的状态（借助第二张截图时已加载完成，这里再补一张长图）
+          ls -lh shots
+
+      - name: 上传截图产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: shots/
+          retention-days: 14
+
+      - name: 失败时输出模拟主控日志
+        if: failure()
+        run: tail -50 /tmp/mock.log || true

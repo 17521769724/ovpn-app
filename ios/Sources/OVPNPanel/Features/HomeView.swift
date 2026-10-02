@@ -91,6 +91,11 @@ struct HomeView: View {
         .task {
             await vpn.prepare()
             await load()
+            // 冷启动时隧道可能已由「系统设置」建立：直接进入已连接状态（含计时与实时统计）
+            if vpn.status == .connected {
+                if connectedSince == nil { connectedSince = Date() }
+                startStats()
+            }
         }
         .refreshable {
             Haptics.refresh()
@@ -777,23 +782,25 @@ struct HomeView: View {
         Haptics.disconnected()
         stopStats()
         app.showToast("已断开连接", kind: .info)
-        // 同步关闭主控侧会话并通知节点释放 peer，避免「在线会话」残留
-        try? await APIClient.shared.closeSessions()
+        // 主控侧会话由 VPNManager 在状态落为「已断开」时统一关闭（含系统设置里断开的情况）
     }
 
     /// 监听隧道状态：只有真正连接成功才进入「已连接」；失败则回到选择页并提示
     private func handleStatusChange(_ status: NEVPNStatus) {
         switch status {
         case .connected:
+            connectingFamily = nil
             if attemptActive {
                 attemptActive = false
-                connectingFamily = nil
                 Haptics.connected()
                 let name = vpn.activeServerName
                 app.showToast(name.isEmpty ? "已连接" : "已连接到 \(name)", kind: .success)
                 resetSessionStats()
-                startStats()
+            } else if connectedSince == nil {
+                // 连接由系统设置等外部途径建立（App 未发起）：补上会话计时
+                connectedSince = Date()
             }
+            startStats()
         case .disconnected:
             if attemptActive {
                 attemptActive = false
@@ -804,8 +811,8 @@ struct HomeView: View {
                 Task { await app.checkStatusNow() }
             }
             stopStats()
-            // 隧道已断开（含用户在系统设置里关闭）：同步关闭主控侧会话，避免「在线会话」残留
-            Task { try? await APIClient.shared.closeSessions() }
+            connectedSince = nil
+            // 主控侧会话由 VPNManager 在状态变化时统一关闭（含系统设置里断开的情况）
         default:
             break
         }
@@ -846,6 +853,11 @@ struct HomeView: View {
         let session = center.onlineSessions.first { $0.nodeId == vpn.activeNodeId }
             ?? center.onlineSessions.first
         guard let session else { return }
+
+        // 从主控会话时间恢复计时（例如在系统设置里连接后回到 App）
+        if connectedSince == nil, let started = Format.parse(session.connectedAt) {
+            connectedSince = started
+        }
 
         let rx = session.rxBytes
         let tx = session.txBytes

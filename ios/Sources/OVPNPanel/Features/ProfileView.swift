@@ -121,25 +121,29 @@ struct ProfileView: View {
                         .foregroundStyle(palette.secondaryText)
                 }
                 Spacer()
+                // 数据未就绪时先占位，避免加载完成后整块插入导致布局跳动
                 if let center {
                     StatusBadge(
                         text: center.quota.valid ? "正常" : "受限",
                         background: center.quota.valid ? palette.onlineBg : palette.offlineBg,
                         foreground: center.quota.valid ? palette.onlineText : palette.offlineText
                     )
+                } else {
+                    StatusBadge(text: "同步中", background: palette.muted, foreground: palette.mutedForeground)
                 }
             }
 
-            if let center {
-                if !center.quota.valid {
-                    BannerBar(message: center.quota.reason)
-                }
-                VStack(spacing: 6) {
-                    InfoRow(label: "当前套餐", value: center.plan?.name ?? "未订阅")
-                    InfoRow(label: "到期时间", value: Format.dateOnly(app.user?.planExpiresAt))
-                    InfoRow(label: "限速", value: Format.speed(app.user?.speedLimitKbps ?? 0))
-                    InfoRow(label: "设备上限", value: (app.user?.deviceLimit ?? 0) > 0 ? "\(app.user?.deviceLimit ?? 0) 台" : "不限")
-                }
+            if let center, !center.quota.valid {
+                BannerBar(message: center.quota.reason)
+            }
+            // 固定行数：数据未就绪时以占位符展示，加载完成后仅数值变化、不发生布局跳动
+            VStack(spacing: 6) {
+                InfoRow(label: "当前套餐", value: center?.plan?.name ?? "—")
+                InfoRow(label: "到期时间", value: center == nil ? "—" : Format.dateOnly(app.user?.planExpiresAt))
+                InfoRow(label: "限速", value: center == nil ? "—" : Format.speed(app.user?.speedLimitKbps ?? 0))
+                InfoRow(label: "设备上限",
+                        value: center == nil ? "—"
+                            : ((app.user?.deviceLimit ?? 0) > 0 ? "\(app.user?.deviceLimit ?? 0) 台" : "不限"))
             }
         }
         .padding(DS.Size.cardPadding)
@@ -178,53 +182,57 @@ struct ProfileView: View {
                             set: { trafficDays = $0 == 0 ? 7 : 15 }
                         )
                     )
-                    .fixedSize()
                 }
 
-                if let center {
-                    let used = center.traffic.usedBytes
-                    let limit = center.traffic.limitBytes
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(Format.bytes(used)).font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(DS.Traffic.barStrong)
-                        Text(limit > 0 ? "/ \(Format.bytes(limit))" : "/ 不限量")
-                            .font(DS.Font.bodySmall)
-                            .foregroundStyle(palette.secondaryText)
-                        Spacer()
-                        if limit > 0 {
-                            Text(String(format: "%.1f%%", center.traffic.percent))
-                                .font(DS.Font.number)
-                                .foregroundStyle(DS.Traffic.barStrong)
-                        }
-                    }
+                // 用量区：未就绪时以占位展示，保证首屏与加载完成后布局一致（无跳动）
+                let used = center?.traffic.usedBytes ?? 0
+                let limit = center?.traffic.limitBytes ?? 0
+                let percent = center?.traffic.percent ?? 0
+                HStack(alignment: .firstTextBaseline) {
+                    Text(center == nil ? "—" : Format.bytes(used))
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(DS.Traffic.barStrong)
+                    Text(limit > 0 ? "/ \(Format.bytes(limit))" : "/ 不限量")
+                        .font(DS.Font.bodySmall)
+                        .foregroundStyle(palette.secondaryText)
+                    Spacer()
                     if limit > 0 {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(palette.trafficTracker)
-                                Capsule()
-                                    .fill(
-                                        LinearGradient(colors: [DS.Traffic.bar, DS.Traffic.barStrong],
-                                                       startPoint: .leading, endPoint: .trailing)
-                                    )
-                                    .frame(width: max(0, min(1, center.traffic.percent / 100)) * geo.size.width)
-                            }
-                        }
-                        .frame(height: 8)
+                        Text(String(format: "%.1f%%", percent))
+                            .font(DS.Font.number)
+                            .foregroundStyle(DS.Traffic.barStrong)
                     }
                 }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(palette.trafficTracker)
+                        Capsule()
+                            .fill(
+                                LinearGradient(colors: [DS.Traffic.bar, DS.Traffic.barStrong],
+                                               startPoint: .leading, endPoint: .trailing)
+                            )
+                            .frame(width: max(0, min(1, percent / 100)) * geo.size.width)
+                    }
+                }
+                .frame(height: 8)
 
-                if let traffic, !traffic.days.isEmpty {
-                    TrafficBars(days: traffic.days, palette: palette)
-                        .frame(height: 90)
-                    HStack {
-                        Text("合计 \(Format.bytes(traffic.totalBytes))")
-                            .font(DS.Font.caption)
-                            .foregroundStyle(palette.secondaryText)
-                        Spacer()
-                        HStack(spacing: 10) {
-                            legend(color: DS.Traffic.bar, title: "上传")
-                            legend(color: DS.Traffic.barSoft, title: "下载")
-                        }
+                // 图表：固定高度占位，数据到达后仅柱形变化
+                Group {
+                    if let traffic, !traffic.days.isEmpty {
+                        TrafficBars(days: traffic.days, palette: palette)
+                    } else {
+                        TrafficBarsPlaceholder(palette: palette)
+                    }
+                }
+                .frame(height: 90)
+
+                HStack {
+                    Text(traffic.map { "合计 \(Format.bytes($0.totalBytes))" } ?? "合计 —")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(palette.secondaryText)
+                    Spacer()
+                    HStack(spacing: 10) {
+                        legend(color: DS.Traffic.bar, title: "上传")
+                        legend(color: DS.Traffic.barSoft, title: "下载")
                     }
                 }
             }
@@ -344,6 +352,28 @@ struct ProfileView: View {
         guard let value = try? await APIClient.shared.fetchTraffic(days: days) else { return }
         guard days == trafficDays else { return }
         traffic = value
+    }
+}
+
+/// 流量柱状图占位：保持与真实图表相同的高度与排布，避免加载完成后页面跳动
+struct TrafficBarsPlaceholder: View {
+    let palette: Palette
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 3) {
+            ForEach(0..<15, id: \.self) { _ in
+                VStack(spacing: 3) {
+                    Spacer(minLength: 0)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(palette.trafficTracker.opacity(0.7))
+                        .frame(height: 4)
+                    Text("--")
+                        .font(.system(size: 9))
+                        .foregroundStyle(palette.mutedForeground.opacity(0.5))
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
     }
 }
 
