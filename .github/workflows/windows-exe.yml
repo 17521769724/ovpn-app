@@ -25,21 +25,21 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: 启动模拟主控
-        shell: pwsh
-        run: |
-          $mock = Start-Process -FilePath "python" -ArgumentList ".github/ui-check/mock_master.py" -PassThru -RedirectStandardOutput mock.log -RedirectStandardError mock.err.log
-          for ($i = 0; $i -lt 20; $i++) {
-            Start-Sleep -Milliseconds 500
-            try { Invoke-WebRequest -Uri "http://127.0.0.1:8788/api/v1/lines" -UseBasicParsing -TimeoutSec 2 | Out-Null; Write-Host "mock 就绪"; break }
-            catch { }
-          }
-          Get-Content mock.log -ErrorAction SilentlyContinue | Write-Host
-
       - name: 构建并截图（窗口自渲染）
         continue-on-error: true
         shell: pwsh
         run: |
+          # 模拟主控与截图必须同一个 step：跨 step 的后台进程会被回收
+          $mock = Start-Process -FilePath "python" -ArgumentList ".github/ui-check/mock_master.py" -PassThru -RedirectStandardOutput mock.log -RedirectStandardError mock.err.log
+          $ready = $false
+          for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 500
+            try { Invoke-WebRequest -Uri "http://127.0.0.1:8788/api/v1/lines" -UseBasicParsing -TimeoutSec 2 | Out-Null; $ready = $true; break }
+            catch { }
+          }
+          if (!$ready) { Get-Content mock.err.log -ErrorAction SilentlyContinue | Write-Host; throw "模拟主控启动失败" }
+          Write-Host "mock 就绪 (pid=$($mock.Id))"
+
           dotnet build "windows/OVPNPanel.Wpf/OVPNPanel.Wpf.csproj" -c Release -p:CiSmoke=true -o out/smoke
           $exe = (Resolve-Path "out/smoke/OVPNPanel.exe").Path
           $common = @("-masterURL","http://127.0.0.1:8788","-autoLogin","demo:demo","-noProxy","-winSize","430,760","-theme","light","-shotDelay","6000")
@@ -65,6 +65,7 @@ jobs:
           Write-Host "===== crash.log ====="
           Get-Content "out/smoke/crash.log" -ErrorAction SilentlyContinue | Write-Host
           Get-ChildItem win-*.png | Format-Table Name, Length
+          $mock | Stop-Process -Force -ErrorAction SilentlyContinue
 
       - name: 构建 Release（requireAdministrator 正式版）
         if: always()
