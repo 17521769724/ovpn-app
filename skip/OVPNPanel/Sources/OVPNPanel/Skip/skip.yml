@@ -1,0 +1,8 @@
+# Skip configuration for OVPNPanel module
+#
+# Kotlin 依赖与 Gradle 构建配置可在此补充（build/settings 块）。
+# 本模块为 Skip Lite 转译模块（与 iOS/macOS 共用同一份 SwiftUI 源码）。
+
+# this is a transpiled Skip Lite module
+skip:
+  mode: 'transpiled'
