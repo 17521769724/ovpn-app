@@ -16,37 +16,46 @@ struct ProfileView: View {
 
     var body: some View {
         let palette = Palette(scheme: scheme)
-        ScrollView {
-            VStack(spacing: DS.Size.gapLarge) {
-                userCard(palette)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: DS.Size.gapLarge) {
+                    userCard(palette)
 
-                assetsStrip(palette)
-                trafficCard(palette)
-                sessionCard(palette)
-                menuCard(palette)
+                    assetsStrip(palette)
+                    trafficCard(palette)
+                    sessionCard(palette).id("sessions")
+                    menuCard(palette)
 
-                AppButton(title: "退出登录", icon: "rectangle.portrait.and.arrow.right", style: .destructive) {
-                    showLogout = true
+                    AppButton(title: "退出登录", icon: "rectangle.portrait.and.arrow.right", style: .destructive) {
+                        showLogout = true
+                    }
+                    .padding(.top, 4)
+
+                    HStack(spacing: 8) {
+                        Text("客户端 v\(AppInfo.version) (Build \(AppInfo.build))")
+                        VLine(height: 10)
+                        Text(app.masterURL).lineLimit(1).truncationMode(.middle)
+                    }
+                    .font(DS.Font.caption)
+                    .foregroundStyle(palette.mutedForeground)
+                    .padding(.top, 4)
                 }
-                .padding(.top, 4)
-
-                HStack(spacing: 8) {
-                    Text("客户端 v\(AppInfo.version) (Build \(AppInfo.build))")
-                    VLine(height: 10)
-                    Text(app.masterURL).lineLimit(1).truncationMode(.middle)
-                }
-                .font(DS.Font.caption)
-                .foregroundStyle(palette.mutedForeground)
-                .padding(.top, 4)
+                .padding(.horizontal, DS.Size.pagePadding)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, DS.Size.pagePadding)
-            .padding(.top, 8)
-            .padding(.bottom, 24)
+            .task {
+                await load()
+                // 界面检查：按启动参数滚动到指定区块（如「在线会话」），便于截图核对
+                if let anchor = LaunchArgs.scrollTo {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    proxy.scrollTo(anchor, anchor: .center)
+                }
+            }
         }
         .pageBackground()
         .navigationTitle("个人中心")
         .navigationBarTitleDisplayMode(.large)
-        .task { await load() }
         .refreshable {
             Haptics.refresh()
             await load()

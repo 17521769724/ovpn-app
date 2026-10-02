@@ -93,7 +93,17 @@ jobs:
           done
           xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" 2>/dev/null || true
 
-          # 3) 桌面截图：核对 App 图标（新扁平闪电图标）
+          # 3) 我的页面：滚动到「在线会话」卡片（核对会话列表与「全部断开」入口）
+          xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" 2>/dev/null || true
+          xcrun simctl launch "$DEVICE" "$BUNDLE_ID" \
+            -masterURL http://127.0.0.1:8788 \
+            -autoLogin demo:demo \
+            -startTab 3 -scrollTo sessions > /dev/null
+          sleep 10
+          xcrun simctl io "$DEVICE" screenshot shots/15-profile-sessions.png
+          xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" 2>/dev/null || true
+
+          # 4) 桌面截图：核对 App 图标（新扁平闪电图标）
           sleep 3
           xcrun simctl io "$DEVICE" screenshot shots/20-home-icon.png
 

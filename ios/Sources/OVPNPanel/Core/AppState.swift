@@ -14,6 +14,11 @@ enum LaunchArgs {
         guard let raw = value("-startTab"), let value = Int(raw) else { return 0 }
         return max(0, min(3, value))
     }
+
+    /// 启动后自动滚动到的区块锚点（仅界面检查用，如 "sessions"）
+    static var scrollTo: String? {
+        value("-scrollTo")
+    }
 }
 
 /// 全局应用状态：主控地址、登录态、用户信息、全局横幅提示
