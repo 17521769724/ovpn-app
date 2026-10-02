@@ -165,7 +165,9 @@ namespace OVPNPanel.Core
 
             _state.StateChanged += OnStateChanged;
             VpnManager.Shared.Changed += OnVpnChanged;
+            OVPNPanel.Program.Trace("shell:pre-build");
             Build();
+            OVPNPanel.Program.Trace("shell:built");
         }
 
         public SheetHost Sheet { get { return _sheet; } }

@@ -13,13 +13,55 @@ namespace OVPNPanel
         [STAThread]
         public static void Main()
         {
-            AppTheme.Apply(IsSystemDark());
-            var app = new Application
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => LogCrash(e.ExceptionObject as Exception);
+            try
             {
-                ShutdownMode = ShutdownMode.OnMainWindowClose,
-            };
-            Ui.Post(() => { });
-            app.Run(new MainWindow());
+                Trace("main:enter");
+                AppTheme.Apply(IsSystemDark());
+                Trace("main:theme");
+                var app = new Application
+                {
+                    ShutdownMode = ShutdownMode.OnMainWindowClose,
+                };
+                app.DispatcherUnhandledException += (s, e) =>
+                {
+                    LogCrash(e.Exception);
+                    e.Handled = true;
+                };
+                Ui.Post(() => { });
+                Trace("main:window");
+                app.Run(new MainWindow());
+                Trace("main:exit");
+            }
+            catch (Exception error)
+            {
+                LogCrash(error);
+                throw;
+            }
+        }
+
+        /// <summary>启动阶段埋点（配合 crash.log 定位启动异常）</summary>
+        internal static void Trace(string message)
+        {
+            try
+            {
+                var path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "trace.log");
+                System.IO.File.AppendAllText(path, DateTime.Now.ToString("HH:mm:ss.fff") + " " + message + Environment.NewLine);
+            }
+            catch { }
+        }
+
+        /// <summary>崩溃日志（CI / 用户排障用）：写入程序目录下的 crash.log</summary>
+        internal static void LogCrash(Exception error)
+        {
+            try
+            {
+                var path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
+                System.IO.File.AppendAllText(path,
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + Environment.NewLine
+                    + (error == null ? "(unknown)" : error.ToString()) + Environment.NewLine + Environment.NewLine);
+            }
+            catch { }
         }
 
         /// <summary>读取 Windows 应用主题（Win7 无此设置时按亮色处理）</summary>
@@ -62,10 +104,12 @@ namespace OVPNPanel
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
 
             _shell = new MainShell();
+            OVPNPanel.Program.Trace("window:shell-built");
             Content = _shell;
 
             ApplyWindowSizeOverride();
             PreviewKeyDown += OnPreviewKeyDown;
+            OVPNPanel.Program.Trace("window:ready");
         }
 
         /// <summary>CI 截图用：-winSize 420,700 指定窗口尺寸（正常启动不生效）</summary>

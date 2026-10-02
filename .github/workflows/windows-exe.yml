@@ -28,32 +28,47 @@ jobs:
       - name: 构建界面自检版（asInvoker，免 UAC）
         run: dotnet build "$env:PROJ" -c Release -p:CiSmoke=true -o out/smoke
 
-      - name: 启动并截图（四个 Tab）
+      - name: 启动并截图
+        continue-on-error: true
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Windows.Forms
           Add-Type -AssemblyName System.Drawing
           $exe = (Resolve-Path "out/smoke/OVPNPanel.exe").Path
-          for ($tab = 0; $tab -le 3; $tab++) {
-            $p = Start-Process -FilePath $exe -ArgumentList "-demo","-startTab","$tab","-winSize","430,700","-theme","light" -PassThru
+
+          function Shot([string]$name, [string[]]$args) {
+            $p = Start-Process -FilePath $exe -ArgumentList $args -PassThru
             Start-Sleep -Seconds 6
-            if ($p.HasExited) { throw "Tab $tab 启动即退出，exit=$($p.ExitCode)" }
+            if ($p.HasExited) {
+              $trace = "out/smoke/trace.log"
+              if (Test-Path $trace) { Write-Host "===== trace.log ($name) ====="; Get-Content $trace | Write-Host }
+              $log = "out/smoke/crash.log"
+              if (Test-Path $log) { Write-Host "===== crash.log ($name) ====="; Get-Content $log | Write-Host }
+              throw "[$name] 启动即退出，exit=$($p.ExitCode)"
+            }
             $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
             $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
             $g = [System.Drawing.Graphics]::FromImage($bmp)
             $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-            $bmp.Save("$PWD/win-tab$tab.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $bmp.Save("$PWD/win-$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
             $g.Dispose(); $bmp.Dispose()
-            Write-Host "tab $tab ok, alive=$(-not $p.HasExited)"
+            Write-Host "[$name] ok, alive=$(-not $p.HasExited)"
             $p | Stop-Process -Force
             Start-Sleep -Seconds 1
           }
-          Get-ChildItem win-tab*.png | Format-Table Name, Length
+
+          Shot "setup" @("-winSize","430,700","-theme","light")
+          for ($tab = 0; $tab -le 3; $tab++) {
+            Shot "tab$tab" @("-demo","-startTab","$tab","-winSize","430,700","-theme","light")
+          }
+          Get-ChildItem win-*.png | Format-Table Name, Length
 
       - name: 构建 Release（requireAdministrator 正式版）
+        if: always()
         run: dotnet build "$env:PROJ" -c Release -t:Rebuild -o out/release
 
       - name: 校验产物
+        if: always()
         shell: pwsh
         run: |
           Get-ChildItem out/release | Format-Table Name, Length
@@ -62,6 +77,7 @@ jobs:
           (Get-Item $exe).VersionInfo | Format-List FileVersion, ProductName
 
       - name: 上传 EXE 产物
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: OVPNPanel-windows
@@ -75,6 +91,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: OVPNPanel-windows-screenshots
-          path: win-tab*.png
+          path: |
+            win-*.png
+            out/smoke/crash.log
+            out/smoke/trace.log
           if-no-files-found: warn
           retention-days: 14
