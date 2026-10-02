@@ -96,7 +96,7 @@ struct MainTabView: View {
         HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { tab = index }
+                    withAnimation(Animation.spring(response: 0.32, dampingFraction: 0.82)) { tab = index }
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: tab == index ? item.activeIcon : item.icon)
@@ -109,7 +109,9 @@ struct MainTabView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: DS.Size.tabBarHeight)
+#if !SKIP
                     .contentShape(Rectangle())
+#endif
                 }
                 .buttonStyle(PressableStyle(scale: 0.88))
             }

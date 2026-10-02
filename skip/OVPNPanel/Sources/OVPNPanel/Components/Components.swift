@@ -54,6 +54,9 @@ struct SafariSheet: View {
 
 /// 自动换行布局：子视图按行从左到右排列，一行放不下时整体换到下一行。
 /// 用于快捷金额等「同一行展示、过长自动换行」的场景。
+///
+/// Skip 不支持自定义 `Layout` 协议，Android 侧改用等价的等分换行实现（见 PlansView）。
+#if !SKIP
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
@@ -95,6 +98,7 @@ struct FlowLayout: Layout {
         }
     }
 }
+#endif
 
 enum Haptics {
     /// 下拉刷新触发时的轻微反馈
@@ -126,7 +130,7 @@ struct PressableStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
             .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(Animation.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -291,7 +295,9 @@ struct SegmentedTabs: View {
                                 .fill(selection == index ? palette.card : Color.clear)
                                 .shadow(color: .black.opacity(selection == index ? 0.08 : 0), radius: 3, y: 1)
                         )
+#if !SKIP
                         .contentShape(Rectangle())
+#endif
                 }
                 .buttonStyle(PressableStyle(scale: 0.96))
             }
@@ -323,7 +329,9 @@ struct AppTextField: View {
                 } else {
                     TextField(placeholder, text: $text)
                         .keyboardType(keyboard)
+#if !SKIP
                         .autocapitalization(.none)
+#endif
                         .disableAutocorrection(true)
                 }
             }
@@ -636,15 +644,17 @@ struct ToastHost: View {
                     .padding(.top, 6)
                     .transition(
                         .asymmetric(
-                            insertion: .scale(scale: 0.97, anchor: .top).combined(with: .opacity),
-                            removal: .opacity
+                            insertion: AnyTransition
+                                .scale(scale: 0.97, anchor: UnitPoint.top)
+                                .combined(with: AnyTransition.opacity),
+                            removal: AnyTransition.opacity
                         )
                     )
                     .onTapGesture { app.dismissToast() }
             }
             Spacer()
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: app.toast)
+        .animation(Animation.spring(response: 0.32, dampingFraction: 0.9), value: app.toast)
         .allowsHitTesting(app.toast != nil)
     }
 }
@@ -705,7 +715,9 @@ struct MenuRow: View {
         }
         .padding(.horizontal, DS.Size.cardPadding)
         .frame(height: 58)
+#if !SKIP
         .contentShape(Rectangle())
+#endif
     }
 }
 

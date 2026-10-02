@@ -247,7 +247,7 @@ final class AppState: ObservableObject {
         guard !value.isEmpty else { return }
         let token = UUID()
         toastToken = token
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+        withAnimation(Animation.spring(response: 0.32, dampingFraction: 0.86)) {
             toast = ToastMessage(text: value, kind: kind)
         }
         let duration: Double = kind == .error ? 3.6 : 2.6

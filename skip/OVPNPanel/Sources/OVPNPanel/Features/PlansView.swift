@@ -684,6 +684,21 @@ struct RechargeView: View {
 
     private let quickAmounts: [Double] = [10, 30, 50, 100, 200, 500]
 
+    /// 快捷金额按每行 3 个分行（Skip 不支持自定义 Layout，两端统一使用等分换行）
+    private var quickAmountRows: [[Double]] {
+        var rows: [[Double]] = []
+        var current: [Double] = []
+        for value in quickAmounts {
+            current.append(value)
+            if current.count == 3 {
+                rows.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty { rows.append(current) }
+        return rows
+    }
+
     private var amountYuan: Double { Double(amountText.trimmingCharacters(in: .whitespaces)) ?? 0 }
 
     var body: some View {
@@ -720,24 +735,29 @@ struct RechargeView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             AppTextField(title: "充值金额（元）", placeholder: "请输入充值金额（最少 1 元）",
                                          text: $amountText, keyboard: .decimalPad)
-                            // 快捷金额：金额与单位同一行展示，一行放不下时整块自动换行
-                            FlowLayout(spacing: 8) {
-                                ForEach(quickAmounts, id: \.self) { value in
-                                    let text = String(format: "%.0f", value)
-                                    Button {
-                                        amountText = text
-                                    } label: {
-                                        Text("\(text) 元")
-                                            .font(.system(size: 13, weight: .medium))
-                                            .lineLimit(1)
-                                            .fixedSize()
-                                            .foregroundStyle(amountText == text ? .white : palette.secondaryText)
-                                            .padding(.horizontal, 12)
-                                            .frame(height: 32)
-                                            .background(amountText == text ? palette.primary : palette.muted.opacity(0.6))
-                                            .clipShape(Capsule())
+                            // 快捷金额：金额与单位同一行展示，每行 3 个（三端一致）
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(Array(quickAmountRows.enumerated()), id: \.offset) { _, rowValues in
+                                    HStack(spacing: 8) {
+                                        ForEach(rowValues, id: \.self) { value in
+                                            let text = String(format: "%.0f", value)
+                                            Button {
+                                                amountText = text
+                                            } label: {
+                                                Text("\(text) 元")
+                                                    .font(.system(size: 13, weight: .medium))
+                                                    .lineLimit(1)
+                                                    .fixedSize()
+                                                    .foregroundStyle(amountText == text ? .white : palette.secondaryText)
+                                                    .padding(.horizontal, 12)
+                                                    .frame(height: 32)
+                                                    .background(amountText == text ? palette.primary : palette.muted.opacity(0.6))
+                                                    .clipShape(Capsule())
+                                            }
+                                            .buttonStyle(PressableStyle(scale: 0.96))
+                                        }
+                                        Spacer(minLength: 0)
                                     }
-                                    .buttonStyle(PressableStyle(scale: 0.96))
                                 }
                             }
                         }

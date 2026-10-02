@@ -349,7 +349,7 @@ struct HomeView: View {
                 if selectedNode != nil {
                     // 非白底按钮：主题色浅底胶囊，明确可点
                     Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        withAnimation(Animation.spring(response: 0.3, dampingFraction: 0.85)) {
                             showServerPicker = false
                             // 返回线路列表后不再保留已选线路，连接栏收起
                             selectedLineId = nil
@@ -376,7 +376,7 @@ struct HomeView: View {
             } else {
                 ForEach(payload?.nodes ?? []) { node in
                     Button {
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+                        withAnimation(Animation.spring(response: 0.32, dampingFraction: 0.85)) {
                             selectedNodeId = node.id
                             selectedLineId = nil
                             showServerPicker = false
@@ -536,7 +536,7 @@ struct HomeView: View {
                     }
                     Spacer(minLength: 6)
                     Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        withAnimation(Animation.spring(response: 0.3, dampingFraction: 0.85)) {
                             showServerPicker = true
                             selectedLineId = nil
                         }
@@ -564,7 +564,7 @@ struct HomeView: View {
                 // 「全部」与竖线固定在左侧不参与滑动，其余分类单独横向滚动
                 HStack(spacing: 8) {
                     ChipButton(title: "全部", selected: category == "全部") {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { category = "全部" }
+                        withAnimation(Animation.spring(response: 0.3, dampingFraction: 0.85)) { category = "全部" }
                     }
                     VLine(height: 16)
 
@@ -572,7 +572,7 @@ struct HomeView: View {
                         HStack(spacing: 8) {
                             ForEach(Array(categories.dropFirst()), id: \.self) { item in
                                 ChipButton(title: item, selected: item == category) {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { category = item }
+                                    withAnimation(Animation.spring(response: 0.3, dampingFraction: 0.85)) { category = item }
                                 }
                             }
                         }
@@ -591,7 +591,7 @@ struct HomeView: View {
             } else {
                 ForEach(visibleLines) { line in
                     Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selectedLineId = line.id }
+                        withAnimation(Animation.spring(response: 0.3, dampingFraction: 0.85)) { selectedLineId = line.id }
                     } label: {
                         lineCard(palette, line: line)
                     }
