@@ -1,0 +1,112 @@
+name: OVPNPanel
+
+options:
+  bundleIdPrefix: com.ovpn
+  # 构建机为 Xcode 15.4（macos-14），必须生成 Xcode 15 兼容的工程格式，
+  # 否则默认的 xcode16_0 格式会报 "future Xcode project file format (77)"
+  projectFormat: xcode15_3
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  # 共享 UI 模块（Skip 工程根目录）：SwiftUI 源码在此，
+  # iOS 直接编译为原生 SwiftUI，Android 由 skipstone 转译为 Jetpack Compose。
+  OVPNPanel:
+    path: ..
+  TunnelKit:
+    # 上游 partout-io/tunnelkit 依赖的 wireguard-apple 仓库已失效（404），
+    # 使用本项目 fork（已移除 WireGuard 依赖，仅保留 OpenVPN 能力）。
+    url: https://github.com/17521769724/tunnelkit
+    revision: db03b9d5af783c40738a187cce3612c4259b2b3a
+
+settings:
+  base:
+    MARKETING_VERSION: "1.2.6"
+    CURRENT_PROJECT_VERSION: "10"
+    SWIFT_VERSION: "5.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CLANG_ENABLE_MODULES: YES
+
+targets:
+  OVPNPanel:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+        excludes:
+          - "Info.plist"
+      - path: Assets.xcassets
+    dependencies:
+      - target: OVPNTunnel
+      # 共享 UI 模块（含全部页面、状态与网络层）
+      - package: OVPNPanel
+        product: OVPNPanel
+      - package: TunnelKit
+        product: TunnelKitOpenVPN
+      - package: TunnelKit
+        product: TunnelKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ovpn.panel
+        PRODUCT_NAME: OVPN
+        INFOPLIST_FILE: Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGN_ENTITLEMENTS: Entitlements/OVPNPanel.entitlements
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
+        ONLY_ACTIVE_ARCH: NO
+        ARCHS: arm64
+
+  # 数据包隧道扩展（OpenVPN 内核，基于 TunnelKit）
+  OVPNTunnel:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Tunnel
+        excludes:
+          - "Info.plist"
+    dependencies:
+      - package: TunnelKit
+        product: TunnelKitOpenVPNAppExtension
+      - package: TunnelKit
+        product: TunnelKit
+    info:
+      path: Tunnel/Info.plist
+      properties:
+        CFBundleDisplayName: OVPN Tunnel
+        # 与主 App 版本保持一致，避免扩展版本不匹配告警
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ovpn.panel.tunnel
+        PRODUCT_NAME: OVPNTunnel
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGN_ENTITLEMENTS: Entitlements/OVPNTunnel.entitlements
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
+        ONLY_ACTIVE_ARCH: NO
+        ARCHS: arm64
+
+schemes:
+  OVPNPanel:
+    build:
+      targets:
+        OVPNPanel: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    archive:
+      config: Release

@@ -1,0 +1,192 @@
+name: skip-build
+
+# Skip 重构后的统一构建流水线：一条 SwiftUI 代码同时产出 iOS IPA 与 Android APK。
+# 取代原 ios-ipa.yml（原流水线只产出 IPA）。
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'skip/**'
+      - '.github/workflows/skip-build.yml'
+
+env:
+  SKIP_APP_DIR: skip/OVPNPanel
+  SKIP_SOURCES: skip/OVPNPanel/Sources
+
+jobs:
+  # ---------------------------------------------------------------- iOS IPA
+  ios-ipa:
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 显示工具链版本
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: 安装 XcodeGen 与 ldid
+        run: |
+          brew install xcodegen
+          brew install ldid || echo "ldid 安装失败，后续使用 codesign 兜底"
+
+      - name: 缓存 SwiftPM 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/Library/Developer/Xcode/DerivedData
+          key: skip-spm-${{ hashFiles('skip/OVPNPanel/Package.swift') }}
+
+      - name: 生成 Xcode 工程
+        working-directory: ${{ env.SKIP_APP_DIR }}/Darwin
+        run: |
+          xcodegen generate
+          grep -m1 "objectVersion" OVPNPanel.xcodeproj/project.pbxproj || true
+
+      - name: 解析 Swift 包依赖
+        working-directory: ${{ env.SKIP_APP_DIR }}/Darwin
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project OVPNPanel.xcodeproj \
+            -scheme OVPNPanel 2>&1 | tail -20
+
+      - name: 构建 App（不签名）
+        working-directory: ${{ env.SKIP_APP_DIR }}/Darwin
+        run: |
+          set -o pipefail
+          STATUS=0
+          xcodebuild \
+            -project OVPNPanel.xcodeproj \
+            -scheme OVPNPanel \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee /tmp/xcodebuild.log | tail -40 || STATUS=$?
+          echo "=== 编译错误汇总 ==="
+          grep -E ": error:" /tmp/xcodebuild.log || echo "(无 error)"
+          exit $STATUS
+
+      - name: 打包为未签名 IPA（巨魔自签安装，注入 NetworkExtension entitlements）
+        working-directory: ${{ env.SKIP_APP_DIR }}/Darwin
+        run: |
+          set -e
+          PRODUCTS="build/Build/Products/Release-iphoneos"
+          APP="$(find "$PRODUCTS" -maxdepth 1 -name '*.app' | head -1)"
+          if [ -z "$APP" ]; then echo "未找到 .app 产物"; exit 1; fi
+          echo "产物：$APP"
+
+          rm -rf Payload OVPNPanel-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+
+          sign() {
+            local binary="$1"
+            local entitlements="$2"
+            [ -f "$binary" ] || return 0
+            if command -v ldid >/dev/null 2>&1; then
+              ldid -S"$entitlements" "$binary"
+            else
+              codesign -f -s - --entitlements "$entitlements" "$binary"
+            fi
+          }
+
+          sign "Payload/OVPN.app/OVPN" "Entitlements/OVPNPanel.entitlements"
+
+          EXT_EXEC="Payload/OVPN.app/PlugIns/OVPNTunnel.appex/OVPNTunnel"
+          if [ -f "$EXT_EXEC" ]; then
+            sign "$EXT_EXEC" "Entitlements/OVPNTunnel.entitlements"
+            echo "已为隧道扩展注入 entitlements"
+          else
+            echo "警告：未找到隧道扩展可执行文件"
+          fi
+
+          find Payload -type f \( -name "*.dylib" -o -perm -111 \) ! -name "OVPN" ! -name "OVPNTunnel" \
+            -exec sh -c 'file "$1" | grep -q "Mach-O" && ldid -S "$1" 2>/dev/null || true' _ {} \; || true
+
+          zip -qry OVPNPanel-unsigned.ipa Payload
+          ls -lh OVPNPanel-unsigned.ipa
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: OVPNPanel-ipa
+          path: ${{ env.SKIP_APP_DIR }}/Darwin/OVPNPanel-unsigned.ipa
+          retention-days: 30
+
+  # --------------------------------------------------------------- Android APK
+  android-apk:
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 显示工具链版本
+        run: |
+          swift --version
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME" || true
+          gradle --version | head -8
+
+      - name: 安装 Skip 工具链
+        run: |
+          brew install skiptools/skip/skip
+          skip checkup || true
+
+      - name: 缓存 Gradle 与 SwiftPM 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/Library/Caches/org.swift.swiftpm
+          key: skip-gradle-${{ hashFiles('skip/OVPNPanel/Package.swift', 'skip/OVPNPanel/Android/**/*.gradle.kts') }}
+
+      - name: 准备 Gradle Wrapper
+        working-directory: ${{ env.SKIP_APP_DIR }}/Android
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.9
+          fi
+          chmod +x gradlew
+
+      - name: 构建 Debug APK
+        working-directory: ${{ env.SKIP_APP_DIR }}/Android
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log | tail -60
+
+      - name: 构建 Release APK（debug 签名，可直接侧载）
+        working-directory: ${{ env.SKIP_APP_DIR }}/Android
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee -a /tmp/gradle.log | tail -60
+
+      - name: 校验 APK 信息
+        working-directory: ${{ env.SKIP_APP_DIR }}/Android
+        run: |
+          set -e
+          APK="$(find app/build/outputs/apk -name '*.apk' | head -1)"
+          echo "APK: $APK"
+          ls -lh app/build/outputs/apk/*/*.apk || true
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | tail -1)"
+          "$BT/aapt" dump badging "$APK" | grep -E "^package|sdkVersion|targetSdkVersion|application-label" || true
+
+      - name: 上传 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: OVPNPanel-apk
+          path: ${{ env.SKIP_APP_DIR }}/Android/app/build/outputs/apk/**/*.apk
+          retention-days: 30
+
+      - name: 失败时输出构建日志摘要
+        if: failure()
+        run: |
+          echo "=== Gradle 错误 ==="
+          grep -E "^e: |error:|FAILURE|What went wrong|Caused by" /tmp/gradle.log | head -40 || true

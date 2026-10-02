@@ -8,3 +8,22 @@ ios/*.xcworkspace/
 
 # 通用
 *.log
+
+# Android（改造前的 Kotlin 版）构建产物：体积大，不入库
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+
+# Skip 工程构建产物
+skip/OVPNPanel/Darwin/OVPNPanel.xcodeproj/
+skip/OVPNPanel/Darwin/build/
+skip/OVPNPanel/Darwin/Payload/
+skip/OVPNPanel/Darwin/*.ipa
+skip/OVPNPanel/Android/.gradle/
+skip/OVPNPanel/Android/build/
+skip/OVPNPanel/Android/app/build/
+skip/OVPNPanel/Android/local.properties
+skip/OVPNPanel/Android/gradlew
+skip/OVPNPanel/Android/gradlew.bat
+skip/OVPNPanel/Android/gradle/wrapper/

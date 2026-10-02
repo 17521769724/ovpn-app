@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  OVPN 客户端 · Skip Android 模块清单
+
+  说明：
+  - `.AndroidAppMain` 与 `.MainActivity` 由 Skip 的 skip-build-plugin 在构建期生成，
+    分别对应 SwiftUI 的 `@main App` 与承载 Compose 内容的宿主 Activity。
+  - VPN 能力由 `io.github.tim06:openvpn`（OpenVPN 3 内核）提供，
+    其 VpnService 与 `BIND_VPN_SERVICE` 权限通过库自带清单自动合并。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 网络访问：登录主控、获取线路、下载 .ovpn 配置 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- VPN 前台服务常驻（连接期间显示状态通知） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 保证在有 Chrome / 浏览器的设备上能打开支付页 -->
+    <queries>
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".AndroidAppMain"
+        android:label="OVPN"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true">
+
+        <!--
+          应用级 Context 注入（剪贴板 / SecurePrefs / 启动浏览器 / VpnService 授权都需要）。
+          ContentProvider 在 Application.onCreate 之前实例化，是最可靠的初始化入口。
+        -->
+        <provider
+            android:name=".AppEnvInitializer"
+            android:authorities="${applicationId}.appenv"
+            android:exported="false" />
+
+        <!-- 承载 Skip 转译后 Compose 界面的宿主 Activity -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|fontScale|fontWeightAdjustment|keyboard|layoutDirection|locale|mcc|navigation|smallestScreenSize|touchscreen|uiMode"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
