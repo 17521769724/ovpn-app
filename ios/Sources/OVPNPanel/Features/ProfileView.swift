@@ -330,7 +330,7 @@ struct ProfileView: View {
         AppCard(padding: 0) {
             VStack(spacing: 0) {
                 menuRow(palette, icon: "megaphone.fill", color: DS.IconColor.rose, title: "公告",
-                        subtitle: unreadCount > 0 ? "有 \(unreadCount) 条未读" : nil,
+                        badge: unreadCount > 0 ? "\(unreadCount)" : nil,
                         destination: AnyView(AnnouncementsView().environmentObject(app)))
                 divider(palette)
                 menuRow(palette, icon: "ticket.fill", color: DS.IconColor.amber, title: "激活码",
@@ -356,9 +356,9 @@ struct ProfileView: View {
     }
 
     private func menuRow(_ palette: Palette, icon: String, color: Color, title: String,
-                         subtitle: String? = nil, destination: AnyView) -> some View {
+                         subtitle: String? = nil, badge: String? = nil, destination: AnyView) -> some View {
         NavigationLink(destination: destination) {
-            MenuRow(icon: icon, iconColor: color, title: title, subtitle: subtitle)
+            MenuRow(icon: icon, iconColor: color, title: title, subtitle: subtitle, badge: badge)
         }
         .buttonStyle(PressableStyle(scale: 0.98))
     }

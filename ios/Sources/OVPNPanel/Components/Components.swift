@@ -27,6 +27,50 @@ struct SafariSheet: UIViewControllerRepresentable {
 
 // MARK: - 交互反馈（仅保留：下拉刷新 / 连接 / 断开）
 
+/// 自动换行布局：子视图按行从左到右排列，一行放不下时整体换到下一行。
+/// 用于快捷金额等「同一行展示、过长自动换行」的场景。
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidths: [CGFloat] = [0]
+        var rowHeights: [CGFloat] = [0]
+        var row = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let width = rowWidths[row] == 0 ? size.width : rowWidths[row] + spacing + size.width
+            if width > maxWidth, rowWidths[row] > 0 {
+                row += 1
+                rowWidths.append(size.width)
+                rowHeights.append(size.height)
+            } else {
+                rowWidths[row] = width
+                rowHeights[row] = max(rowHeights[row], size.height)
+            }
+        }
+        let totalHeight = rowHeights.reduce(0, +) + spacing * CGFloat(max(0, rowHeights.count - 1))
+        return CGSize(width: min(rowWidths.max() ?? 0, maxWidth), height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
 enum Haptics {
     /// 下拉刷新触发时的轻微反馈
     static func refresh() {
@@ -269,6 +313,39 @@ struct AppTextField: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
         }
+    }
+}
+
+// MARK: - 只读字段（密保等已设置信息展示：不可点击、不可编辑）
+
+struct ReadOnlyField: View {
+    let title: String
+    var value: String = ""
+    /// 以圆点掩码展示（用于密保答案等敏感内容）
+    var masked: Bool = false
+
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let palette = Palette(scheme: scheme)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(DS.Font.bodySmall).foregroundStyle(palette.secondaryText)
+            Text(masked ? "••••••••" : value)
+                .font(DS.Font.body)
+                .foregroundStyle(palette.mutedForeground)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .frame(height: DS.Size.inputHeight)
+                .background(palette.muted.opacity(0.6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.lg)
+                        .stroke(palette.border, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        }
+        .allowsHitTesting(false)
     }
 }
 

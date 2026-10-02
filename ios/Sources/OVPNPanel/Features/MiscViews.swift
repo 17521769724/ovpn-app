@@ -632,9 +632,16 @@ struct AccountSettingsView: View {
     @State private var answer = ""
     @State private var savingSecurity = false
     @State private var currentQuestion: String?
+    @State private var securityLoaded = false
     @State private var loaded = false
 
+    /// 是否已设置密保（已设置后界面只读展示，不再提供修改入口）
+    private var hasSecurityQuestion: Bool {
+        !(currentQuestion ?? "").isEmpty
+    }
+
     var body: some View {
+        let palette = Palette(scheme: scheme)
         ScrollView {
             VStack(spacing: DS.Size.gapLarge) {
                 AppCard {
@@ -656,16 +663,24 @@ struct AccountSettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
                             IconTile(icon: "questionmark.key.filled", color: DS.IconColor.tealDeep)
-                            SectionHeader(
-                                title: "密保问题",
-                                subtitle: currentQuestion?.isEmpty == false ? "当前：\(currentQuestion ?? "")" : "用于找回密码，建议设置"
-                            )
+                            SectionHeader(title: "密保问题", subtitle: "用于找回密码")
                         }
-                        AppTextField(title: "密保问题", placeholder: "例如：我的第一台服务器名字", text: $question)
-                        AppTextField(title: "密保答案", placeholder: "找回密码时使用（不区分大小写）", text: $answer)
-                        AppButton(title: "保存密保", icon: "checkmark.shield.fill", style: .primary,
-                                  loading: savingSecurity) {
-                            Task { await saveSecurity() }
+                        if hasSecurityQuestion {
+                            // 已设置密保：仅只读展示问题，答案不明文展示，输入框不可点击，不再显示保存/更新按钮
+                            ReadOnlyField(title: "密保问题", value: currentQuestion ?? "")
+                            ReadOnlyField(title: "密保答案", masked: true)
+                            Text("密保答案已加密保存，不会明文展示；如需修改，请联系管理员在「用户管理」中重置密保后重新设置。")
+                                .font(DS.Font.caption)
+                                .foregroundStyle(palette.mutedForeground)
+                        } else if securityLoaded {
+                            AppTextField(title: "密保问题", placeholder: "例如：我的第一台服务器名字", text: $question)
+                            AppTextField(title: "密保答案", placeholder: "找回密码时使用（不区分大小写）", text: $answer)
+                            AppButton(title: "保存密保", icon: "checkmark.shield.fill", style: .primary,
+                                      loading: savingSecurity) {
+                                Task { await saveSecurity() }
+                            }
+                        } else {
+                            LoadingBlock(text: "正在获取密保信息…")
                         }
                     }
                 }
@@ -680,6 +695,7 @@ struct AccountSettingsView: View {
             guard !loaded else { return }
             loaded = true
             currentQuestion = try? await APIClient.shared.fetchSecurityQuestion()
+            securityLoaded = true
         }
     }
 
