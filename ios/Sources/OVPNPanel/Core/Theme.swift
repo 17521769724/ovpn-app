@@ -38,46 +38,49 @@ enum DS {
         static let number = SwiftUI.Font.system(size: 15, weight: .medium).monospacedDigit()
     }
 
-    // MARK: - 品牌色（按钮与强调元素，避免全局纯黑）
+    // MARK: - 品牌色（绿色为主，配青绿 / 黄绿 / 冷青 / 琥珀等协调辅助色）
     enum Brand {
-        static let blue = Color(hex: 0x2F6BFF)
-        static let blueDeep = Color(hex: 0x1D4ED8)
-        static let indigo = Color(hex: 0x5B5BF0)
-        static let indigoDeep = Color(hex: 0x4338CA)
-        static let teal = Color(hex: 0x0E9F9F)
+        static let primary = Color(hex: 0x059669)      // 主色（深一档，保证白字对比度）
+        static let primaryDeep = Color(hex: 0x047857)
+        static let green = Color(hex: 0x10B981)        // 主绿（emerald-500）
+        static let mint = Color(hex: 0x34D399)         // 亮绿（emerald-400）
+        static let teal = Color(hex: 0x14B8A6)         // 青绿（邻近色）
         static let tealDeep = Color(hex: 0x0F766E)
-        static let red = Color(hex: 0xE5484D)
+        static let lime = Color(hex: 0x84CC16)         // 黄绿（邻近色）
+        static let cyan = Color(hex: 0x06B6D4)         // 冷青（邻近色）
+        static let amber = Color(hex: 0xF59E0B)        // 琥珀（互补强调）
+        static let red = Color(hex: 0xE5484D)          // 危险（断开 / 退出）
         static let redDeep = Color(hex: 0xC02830)
     }
 
     // MARK: - 颜色（亮色）
     enum Light {
-        static let background = Color(hex: 0xF7F7F8)
-        static let foreground = Color(hex: 0x0A0A0A)
+        static let background = Color(hex: 0xF6F8F7)
+        static let foreground = Color(hex: 0x0C1512)
         static let card = Color(hex: 0xFFFFFF)
-        static let cardForeground = Color(hex: 0x0A0A0A)
-        static let primary = Color(hex: 0x2F6BFF)
+        static let cardForeground = Color(hex: 0x0C1512)
+        static let primary = Color(hex: 0x059669)
         static let primaryForeground = Color(hex: 0xFFFFFF)
-        static let secondary = Color(hex: 0xEDF1FA)
-        static let secondaryForeground = Color(hex: 0x2F4A7A)
-        static let muted = Color(hex: 0xF1F2F4)
-        static let mutedForeground = Color(hex: 0x808690)
-        static let border = Color(hex: 0xE6E8EC)
+        static let secondary = Color(hex: 0xE6F7F0)
+        static let secondaryForeground = Color(hex: 0x046B56)
+        static let muted = Color(hex: 0xEEF2F0)
+        static let mutedForeground = Color(hex: 0x7C8A85)
+        static let border = Color(hex: 0xE2E9E6)
         static let destructive = Color(hex: 0xE5484D)
     }
 
     // MARK: - 颜色（暗色）
     enum Dark {
-        static let background = Color(hex: 0x0A0A0A)
-        static let foreground = Color(hex: 0xFAFAFA)
-        static let card = Color(hex: 0x161618)
-        static let cardForeground = Color(hex: 0xFAFAFA)
-        static let primary = Color(hex: 0x5B8CFF)
-        static let primaryForeground = Color(hex: 0x0A1225)
-        static let secondary = Color(hex: 0x1F2733)
-        static let secondaryForeground = Color(hex: 0xC7D6F5)
-        static let muted = Color(hex: 0x232326)
-        static let mutedForeground = Color(hex: 0xA1A1A6)
+        static let background = Color(hex: 0x0A0F0D)
+        static let foreground = Color(hex: 0xF5FAF8)
+        static let card = Color(hex: 0x141A18)
+        static let cardForeground = Color(hex: 0xF5FAF8)
+        static let primary = Color(hex: 0x34D399)
+        static let primaryForeground = Color(hex: 0x04231B)
+        static let secondary = Color(hex: 0x16302A)
+        static let secondaryForeground = Color(hex: 0xA7F3D0)
+        static let muted = Color(hex: 0x212926)
+        static let mutedForeground = Color(hex: 0x9BAAA5)
         static let border = Color.white.opacity(0.10)
         static let destructive = Color(hex: 0xFF6B70)
     }
@@ -140,18 +143,18 @@ enum DS {
         }
     }
 
-    // MARK: - 功能图标配色（多色美化，个人中心/入口通用）
+    // MARK: - 功能图标配色（绿色系为主 + 少量协调强调色）
     enum IconColor {
-        static let blue = Color(hex: 0x3B82F6)
-        static let indigo = Color(hex: 0x6366F1)
-        static let violet = Color(hex: 0x8B5CF6)
-        static let emerald = Color(hex: 0x10B981)
-        static let teal = Color(hex: 0x14B8A6)
-        static let amber = Color(hex: 0xF59E0B)
-        static let orange = Color(hex: 0xF97316)
-        static let rose = Color(hex: 0xF43F5E)
-        static let sky = Color(hex: 0x0EA5E9)
-        static let slate = Color(hex: 0x64748B)
+        static let green = Color(hex: 0x10B981)      // 主绿
+        static let mint = Color(hex: 0x34D399)       // 亮绿
+        static let teal = Color(hex: 0x14B8A6)       // 青绿（邻近）
+        static let tealDeep = Color(hex: 0x0F766E)
+        static let lime = Color(hex: 0x84CC16)       // 黄绿（邻近）
+        static let cyan = Color(hex: 0x06B6D4)       // 冷青（邻近）
+        static let amber = Color(hex: 0xF59E0B)      // 琥珀（互补强调）
+        static let orange = Color(hex: 0xFB923C)     // 橙（金币）
+        static let rose = Color(hex: 0xF43F5E)       // 玫红（警示类入口）
+        static let slate = Color(hex: 0x64748B)      // 中性
     }
 }
 
@@ -195,17 +198,17 @@ struct Palette {
     // MARK: 品牌渐变（按钮）
     var accentGradient: LinearGradient {
         isDark
-            ? LinearGradient(colors: [Color(hex: 0x6E9BFF), Color(hex: 0x4F7BFF)],
+            ? LinearGradient(colors: [Color(hex: 0x10B981), Color(hex: 0x047857)],
                              startPoint: .topLeading, endPoint: .bottomTrailing)
-            : LinearGradient(colors: [DS.Brand.blue, DS.Brand.blueDeep],
+            : LinearGradient(colors: [DS.Brand.primary, DS.Brand.primaryDeep],
                              startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    var indigoGradient: LinearGradient {
+    var tealGradient: LinearGradient {
         isDark
-            ? LinearGradient(colors: [Color(hex: 0x8B8BF7), Color(hex: 0x6366F1)],
+            ? LinearGradient(colors: [Color(hex: 0x2DD4BF), Color(hex: 0x0F766E)],
                              startPoint: .topLeading, endPoint: .bottomTrailing)
-            : LinearGradient(colors: [DS.Brand.indigo, DS.Brand.indigoDeep],
+            : LinearGradient(colors: [DS.Brand.teal, DS.Brand.tealDeep],
                              startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
@@ -217,13 +220,22 @@ struct Palette {
                              startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    /// 连接成功后圆环使用的渐变
+    /// 连接圆环使用的渐变（绿 → 青绿 → 冷青 → 黄绿）
     var connectionGradient: AngularGradient {
         AngularGradient(
-            colors: [DS.Traffic.bar, Color(hex: 0x22D3EE), DS.Brand.blue, DS.Brand.indigo, DS.Traffic.bar],
+            colors: [DS.Traffic.bar, Color(hex: 0x22D3EE), DS.Brand.teal,
+                     DS.Brand.lime, Color(hex: 0x6EE7B7), DS.Traffic.bar],
             center: .center
         )
     }
+
+    /// 连接成功页泡泡动画用的彩色调色板
+    static let bubbleColors: [Color] = [
+        Color(hex: 0x34D399), Color(hex: 0x10B981), Color(hex: 0x14B8A6),
+        Color(hex: 0x06B6D4), Color(hex: 0x22D3EE), Color(hex: 0x84CC16),
+        Color(hex: 0xFACC15), Color(hex: 0xFB923C), Color(hex: 0x60A5FA),
+        Color(hex: 0xA78BFA), Color(hex: 0xF472B6), Color(hex: 0x4ADE80),
+    ]
 
     func toastStyle(_ kind: BannerKind) -> DS.ToastStyle { DS.ToastStyle.of(kind, dark: isDark) }
 }

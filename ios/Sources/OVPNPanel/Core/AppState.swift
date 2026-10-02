@@ -169,7 +169,6 @@ final class AppState: ObservableObject {
                                 || notice.code == "expired" || notice.code == "over_quota")
             ? .error : .warning
         showToast(notice.message, kind: kind)
-        Haptics.warning()
 
         // 被管理员断开 / 封禁：本地同步断开隧道，避免界面仍停留在「已连接」
         if notice.code == "blocked" || notice.code == "banned" {

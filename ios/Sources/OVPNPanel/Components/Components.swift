@@ -25,39 +25,39 @@ struct SafariSheet: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - 交互反馈（iOS 18 风格：按下缩放 + 轻震动）
+// MARK: - 交互反馈（仅保留：下拉刷新 / 连接 / 断开）
 
 enum Haptics {
-    static func tap() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    /// 下拉刷新触发时的轻微反馈
+    static func refresh() {
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.7)
     }
 
-    static func success() {
+    /// 线路连接成功
+    static func connected() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
-    static func warning() {
-        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+    /// 线路连接失败
+    static func connectFailed() {
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
     }
 
-    static func error() {
-        UINotificationFeedbackGenerator().notificationOccurred(.error)
+    /// 断开线路
+    static func disconnected() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 }
 
-/// 卡片/列表行等自定义可点元素的按下反馈
+/// 卡片/列表行等自定义可点元素的按下反馈（仅缩放，不震动）
 struct PressableStyle: ButtonStyle {
     var scale: CGFloat = 0.97
-    var haptic: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
             .opacity(configuration.isPressed ? 0.9 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { pressed in
-                if pressed && haptic { Haptics.tap() }
-            }
     }
 }
 
@@ -93,7 +93,6 @@ struct AppButton: View {
     var body: some View {
         let palette = Palette(scheme: scheme)
         Button {
-            Haptics.tap()
             action()
         } label: {
             HStack(spacing: 6) {
@@ -118,7 +117,7 @@ struct AppButton: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
             .shadow(color: shadowColor(palette), radius: 8, y: 3)
         }
-        .buttonStyle(PressableStyle(haptic: false))
+        .buttonStyle(PressableStyle())
         .disabled(disabled || loading)
         .opacity(disabled ? 0.5 : 1)
     }
@@ -134,7 +133,8 @@ struct AppButton: View {
     @ViewBuilder
     private func background(_ palette: Palette) -> some View {
         switch style {
-        case .primary, .accent: palette.accentGradient
+        case .primary: palette.accentGradient
+        case .accent: palette.tealGradient
         case .secondary: palette.secondary
         case .outline: palette.card
         case .destructive: palette.dangerGradient
@@ -147,7 +147,8 @@ struct AppButton: View {
 
     private func shadowColor(_ palette: Palette) -> Color {
         switch style {
-        case .primary, .accent: return DS.Brand.blue.opacity(0.25)
+        case .primary: return DS.Brand.green.opacity(0.28)
+        case .accent: return DS.Brand.teal.opacity(0.26)
         case .destructive: return DS.Brand.red.opacity(0.24)
         default: return .clear
         }
@@ -181,39 +182,6 @@ struct ChipButton: View {
     }
 }
 
-/// 圆形图标按钮（刷新等），带 iOS 18 风格按下反馈
-struct IconActionButton: View {
-    let icon: String
-    var size: CGFloat = 34
-    var loading: Bool = false
-    let action: () -> Void
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        let palette = Palette(scheme: scheme)
-        Button {
-            Haptics.tap()
-            action()
-        } label: {
-            Group {
-                if loading {
-                    ProgressView().scaleEffect(0.8)
-                } else {
-                    Image(systemName: icon).font(.system(size: size * 0.42, weight: .medium))
-                }
-            }
-            .foregroundStyle(palette.foreground)
-            .frame(width: size, height: size)
-            .background(palette.card)
-            .overlay(Circle().stroke(palette.border, lineWidth: 1))
-            .clipShape(Circle())
-        }
-        .buttonStyle(PressableStyle(scale: 0.9, haptic: false))
-        .disabled(loading)
-    }
-}
-
 /// 分段切换（流量 近 7 天 / 近 15 天）
 struct SegmentedTabs: View {
     let items: [String]
@@ -226,14 +194,15 @@ struct SegmentedTabs: View {
         HStack(spacing: 2) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button {
-                    Haptics.tap()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selection = index }
                 } label: {
                     Text(item)
                         .font(.system(size: 12, weight: selection == index ? .semibold : .regular))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity)
                         .frame(height: 28)
-                        .foregroundStyle(selection == index ? palette.foreground : palette.mutedForeground)
+                        .foregroundStyle(selection == index ? palette.primary : palette.mutedForeground)
                         .background(
                             Group {
                                 if selection == index {
@@ -244,7 +213,7 @@ struct SegmentedTabs: View {
                             }
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle(scale: 0.94))
             }
         }
         .padding(2)
@@ -564,7 +533,7 @@ struct ToastHost: View {
 
 struct IconTile: View {
     let icon: String
-    var color: Color = DS.IconColor.blue
+    var color: Color = DS.IconColor.cyan
     var size: CGFloat = 30
 
     var body: some View {

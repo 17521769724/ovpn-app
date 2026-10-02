@@ -24,8 +24,16 @@ struct AppUser: Decodable {
     let remainBytes: Int64
     let speedLimitKbps: Int
     let deviceLimit: Int
+    /// 用户等级 / 金币 / 余额（老版本主控可能不下发）
+    let level: Int?
+    let coins: Int?
+    let balanceCents: Int?
+    let balanceYuan: Double?
 
     var isBanned: Bool { status == "banned" }
+    var levelValue: Int { level ?? 1 }
+    var coinsValue: Int { coins ?? 0 }
+    var balanceYuanValue: Double { balanceYuan ?? Double(balanceCents ?? 0) / 100 }
 }
 
 struct Quota: Decodable {
@@ -473,6 +481,20 @@ enum Format {
         if kbps <= 0 { return "不限速" }
         if kbps >= 1024 { return String(format: "%.1f Mbps", Double(kbps) / 1024.0) }
         return "\(kbps) Kbps"
+    }
+
+    /// 实时速率（字节/秒 → 可读文本，用于连接页网速显示）
+    static func speedValue(_ bytesPerSecond: Double) -> String {
+        guard bytesPerSecond > 1 else { return "0 KB/s" }
+        let units = ["B/s", "KB/s", "MB/s", "GB/s"]
+        var value = bytesPerSecond
+        var index = 0
+        while value >= 1024 && index < units.count - 1 {
+            value /= 1024
+            index += 1
+        }
+        let digits = value >= 100 ? 0 : (value >= 10 ? 1 : 2)
+        return String(format: "%.\(digits)f %@", value, units[index])
     }
 
     static func traffic(_ value: Int64) -> String {

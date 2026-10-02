@@ -66,7 +66,10 @@ struct AnnouncementsView: View {
         .navigationTitle("公告")
         .navigationBarTitleDisplayMode(.large)
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable {
+            Haptics.refresh()
+            await load()
+        }
     }
 
     private func load() async {
@@ -196,112 +199,110 @@ struct ActivationView: View {
     }
 }
 
-// MARK: - 金币与邀请
+// MARK: - 金币记录
 
+/// 金币记录：只展示金币余额与流水（邀请相关已独立为「邀请」Tab）
 struct CoinsView: View {
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
 
     @State private var payload: CoinsPayload?
     @State private var loading = true
-    @State private var copied = false
 
     var body: some View {
         let palette = Palette(scheme: scheme)
         ScrollView {
             VStack(spacing: DS.Size.gapLarge) {
-                AppCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("我的金币").font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
-                                Text("\(payload?.coins ?? 0)").font(.system(size: 26, weight: .semibold))
-                                    .foregroundStyle(DS.IconColor.orange)
-                            }
-                            Spacer()
-                            Image(systemName: "bitcoinsign.circle.fill")
-                                .font(.system(size: 30))
-                                .foregroundStyle(DS.IconColor.orange)
-                        }
-                        if let payload, payload.coinExchangeEnabled {
-                            Text("金币可在购买套餐时抵扣（以套餐设置的金币价为准）")
-                                .font(DS.Font.caption)
-                                .foregroundStyle(palette.mutedForeground)
-                        }
-                    }
-                }
+                balanceCard(palette)
+                logsCard(palette)
+            }
+            .padding(.horizontal, DS.Size.pagePadding)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
+        }
+        .pageBackground()
+        .navigationTitle("金币记录")
+        .navigationBarTitleDisplayMode(.large)
+        .task { await load() }
+        .refreshable {
+            Haptics.refresh()
+            await load()
+        }
+    }
 
-                if let payload, payload.inviteEnabled {
-                    AppCard {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(spacing: 10) {
-                                IconTile(icon: "person.2.fill", color: DS.IconColor.teal)
-                                SectionHeader(title: "邀请好友", subtitle: "邀请注册双方均可获得金币奖励")
-                            }
-                            HStack {
-                                Image(systemName: "link").foregroundStyle(palette.mutedForeground)
-                                Text(payload.inviteCode)
-                                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(palette.foreground)
-                                Spacer()
-                                Button(copied ? "已复制" : "复制邀请码") {
-                                    UIPasteboard.general.string = payload.inviteCode
-                                    copied = true
-                                }
-                                .font(DS.Font.caption)
-                                .foregroundStyle(palette.foreground)
-                            }
-                            InfoRow(label: "邀请人奖励", value: "\(payload.inviteRewardCoins) 金币")
-                            InfoRow(label: "被邀请人奖励", value: "\(payload.inviteeRewardCoins) 金币")
-                            InfoRow(label: "注册赠送", value: "\(payload.registerCoins) 金币")
-                        }
+    private func balanceCard(_ palette: Palette) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("我的金币").font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
+                        Text("\(payload?.coins ?? 0)")
+                            .font(.system(size: 28, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(DS.IconColor.orange)
                     }
+                    Spacer()
+                    Image(systemName: "bitcoinsign.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(DS.IconColor.orange)
                 }
+                if let payload, payload.coinExchangeEnabled {
+                    BannerBar(message: "金币可在「套餐中心」兑换支持的套餐", kind: .info)
+                }
+            }
+        }
+    }
 
-                AppCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 10) {
-                            IconTile(icon: "list.bullet.rectangle.fill", color: DS.IconColor.violet)
-                            SectionHeader(title: "金币流水")
+    private func logsCard(_ palette: Palette) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    IconTile(icon: "list.bullet.rectangle.fill", color: DS.IconColor.teal)
+                    SectionHeader(title: "金币流水")
+                }
+                if loading && payload == nil {
+                    LoadingBlock()
+                } else if (payload?.logs ?? []).isEmpty {
+                    Text("暂无流水记录")
+                        .font(DS.Font.bodySmall)
+                        .foregroundStyle(palette.mutedForeground)
+                        .padding(.vertical, 4)
+                } else {
+                    ForEach(Array((payload?.logs ?? []).enumerated()), id: \.offset) { index, log in
+                        if index > 0 {
+                            Rectangle().fill(palette.border).frame(height: 1)
                         }
-                        if loading && payload == nil {
-                            LoadingBlock()
-                        } else if (payload?.logs ?? []).isEmpty {
-                            Text("暂无流水记录").font(DS.Font.bodySmall)
-                                .foregroundStyle(palette.mutedForeground)
-                        } else {
-                            ForEach(payload?.logs ?? []) { log in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(log.reason.isEmpty ? "金币变动" : log.reason)
-                                            .font(DS.Font.bodySmall)
-                                            .foregroundStyle(palette.foreground)
-                                        Text(Format.dateTime(log.createdAt))
-                                            .font(DS.Font.caption)
-                                            .foregroundStyle(palette.mutedForeground)
-                                    }
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: 2) {
-                                        Text(log.amount >= 0 ? "+\(log.amount)" : "\(log.amount)")
-                                            .font(DS.Font.number)
-                                            .foregroundStyle(log.amount >= 0 ? palette.onlineText : palette.offlineText)
-                                        Text("余额 \(log.balance)")
-                                            .font(DS.Font.caption)
-                                            .foregroundStyle(palette.mutedForeground)
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
+                        logRow(palette, log: log)
                     }
                 }
             }
-            .padding(DS.Size.pagePadding)
         }
-        .pageBackground()
-        .navigationTitle("金币与邀请")
-        .navigationBarTitleDisplayMode(.large)
-        .task { await load() }
+    }
+
+    private func logRow(_ palette: Palette, log: CoinLog) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: log.amount >= 0 ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(log.amount >= 0 ? palette.onlineText : DS.IconColor.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(log.reason.isEmpty ? "金币变动" : log.reason)
+                    .font(DS.Font.bodySmall)
+                    .foregroundStyle(palette.foreground)
+                    .lineLimit(2)
+                Text(Format.dateTime(log.createdAt))
+                    .font(DS.Font.caption)
+                    .foregroundStyle(palette.mutedForeground)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(log.amount >= 0 ? "+\(log.amount)" : "\(log.amount)")
+                    .font(DS.Font.number)
+                    .foregroundStyle(log.amount >= 0 ? palette.onlineText : palette.offlineText)
+                Text("余额 \(log.balance)")
+                    .font(DS.Font.caption)
+                    .foregroundStyle(palette.mutedForeground)
+            }
+        }
+        .padding(.vertical, 8)
     }
 
     private func load() async {
@@ -335,7 +336,7 @@ struct FeedbackView: View {
                 AppCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
-                            IconTile(icon: "paperplane.fill", color: DS.IconColor.blue)
+                            IconTile(icon: "paperplane.fill", color: DS.IconColor.cyan)
                             SectionHeader(title: "提交反馈", subtitle: "线路问题、建议都可以告诉我们")
                         }
                         AppTextField(title: "标题", placeholder: "简要描述（选填）", text: $title)
@@ -467,14 +468,17 @@ struct InviteView: View {
         .navigationTitle("邀请好友")
         .navigationBarTitleDisplayMode(.large)
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable {
+            Haptics.refresh()
+            await load()
+        }
     }
 
     private func hero(_ palette: Palette) -> some View {
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: DS.Radius.xxl)
                 .fill(
-                    LinearGradient(colors: [DS.Brand.teal, DS.Brand.blue],
+                    LinearGradient(colors: [DS.Brand.green, DS.Brand.tealDeep],
                                    startPoint: .topLeading, endPoint: .bottomTrailing)
                 )
             VStack(alignment: .leading, spacing: 10) {
@@ -520,7 +524,6 @@ struct InviteView: View {
                               style: .secondary, height: DS.Size.buttonHeightSmall) {
                         UIPasteboard.general.string = payload.inviteCode
                         copiedCode = true
-                        Haptics.success()
                         app.showToast("邀请码已复制", kind: .success)
                     }
                     .frame(width: 104)
@@ -542,7 +545,6 @@ struct InviteView: View {
                                   height: DS.Size.buttonHeightSmall) {
                             UIPasteboard.general.string = payload.inviteUrl
                             copiedLink = true
-                            Haptics.success()
                             app.showToast("邀请链接已复制", kind: .success)
                         }
                         if let url = URL(string: payload.inviteUrl) {
@@ -574,11 +576,11 @@ struct InviteView: View {
                     SectionHeader(title: "奖励规则")
                 }
                 rewardRow(palette, icon: "person.fill.checkmark", title: "邀请人奖励",
-                          value: "\(payload.inviteRewardCoins) 金币", color: DS.IconColor.emerald)
+                          value: "\(payload.inviteRewardCoins) 金币", color: DS.IconColor.green)
                 rewardRow(palette, icon: "person.fill.badge.plus", title: "被邀请人奖励",
-                          value: "\(payload.inviteeRewardCoins) 金币", color: DS.IconColor.blue)
+                          value: "\(payload.inviteeRewardCoins) 金币", color: DS.IconColor.cyan)
                 rewardRow(palette, icon: "sparkles", title: "新用户注册赠送",
-                          value: "\(payload.registerCoins) 金币", color: DS.IconColor.violet)
+                          value: "\(payload.registerCoins) 金币", color: DS.IconColor.teal)
             }
         }
     }
@@ -636,7 +638,7 @@ struct AccountSettingsView: View {
                 AppCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
-                            IconTile(icon: "lock.fill", color: DS.IconColor.rose)
+                            IconTile(icon: "lock.fill", color: DS.IconColor.amber)
                             SectionHeader(title: "修改密码")
                         }
                         AppTextField(title: "原密码", placeholder: "当前登录密码", text: $oldPassword, secure: true)
@@ -651,7 +653,7 @@ struct AccountSettingsView: View {
                 AppCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
-                            IconTile(icon: "questionmark.key.filled", color: DS.IconColor.indigo)
+                            IconTile(icon: "questionmark.key.filled", color: DS.IconColor.tealDeep)
                             SectionHeader(
                                 title: "密保问题",
                                 subtitle: currentQuestion?.isEmpty == false ? "当前：\(currentQuestion ?? "")" : "用于找回密码，建议设置"
@@ -659,17 +661,15 @@ struct AccountSettingsView: View {
                         }
                         AppTextField(title: "密保问题", placeholder: "例如：我的第一台服务器名字", text: $question)
                         AppTextField(title: "密保答案", placeholder: "找回密码时使用（不区分大小写）", text: $answer)
-                        AppButton(title: "保存密保", style: .secondary, loading: savingSecurity) {
+                        AppButton(title: "保存密保", icon: "checkmark.shield.fill", style: .primary,
+                                  loading: savingSecurity) {
                             Task { await saveSecurity() }
                         }
                     }
                 }
-
-                AppButton(title: "退出登录", icon: "rectangle.portrait.and.arrow.right", style: .outline) {
-                    app.logout()
-                }
             }
             .padding(DS.Size.pagePadding)
+            .padding(.bottom, 24)
         }
         .pageBackground()
         .navigationTitle("账号设置")

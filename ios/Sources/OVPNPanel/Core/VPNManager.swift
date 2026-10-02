@@ -17,6 +17,8 @@ final class VPNManager: ObservableObject {
     /// 当前连接使用的服务器 / 线路名称（供「已连接」页展示，页面重建后仍可恢复）
     @Published private(set) var activeServerName: String = ""
     @Published private(set) var activeLineName: String = ""
+    /// 当前连接所用节点 ID（用于绑定该会话的流量统计）
+    @Published private(set) var activeNodeId: Int = 0
 
     private var manager: NETunnelProviderManager?
     private var observing = false
@@ -107,6 +109,7 @@ final class VPNManager: ObservableObject {
         let title = "\(profile.nodeName) · \(profile.lineName)"
         activeServerName = profile.nodeName
         activeLineName = profile.lineName
+        activeNodeId = profile.nodeId
         var providerConfiguration = OpenVPN.ProviderConfiguration(
             title,
             appGroup: Self.appGroup,

@@ -113,6 +113,11 @@ extension APIClient {
         try await request("/api/v1/user/status", as: UserStatusPayload.self)
     }
 
+    /// 用户主动断开：关闭主控侧在线会话并通知节点释放 peer
+    func closeSessions() async throws {
+        try await requestVoid("/api/v1/user/sessions", method: "POST", body: ["action": "disconnect"])
+    }
+
     // 用户中心
     func fetchUserCenter() async throws -> UserCenterPayload {
         try await request("/api/v1/user", as: UserCenterPayload.self)

@@ -16,17 +16,14 @@ struct SetupView: View {
 
                 VStack(spacing: 10) {
                     RoundedRectangle(cornerRadius: DS.Radius.xxl)
-                        .fill(
-                            LinearGradient(colors: [DS.IconColor.sky, DS.IconColor.indigo],
-                                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
+                        .fill(palette.accentGradient)
                         .frame(width: 64, height: 64)
                         .overlay(
                             Image(systemName: "shield.lefthalf.filled")
                                 .font(.system(size: 28, weight: .semibold))
                                 .foregroundStyle(.white)
                         )
-                        .shadow(color: DS.IconColor.sky.opacity(0.35), radius: 12, y: 6)
+                        .shadow(color: DS.Brand.green.opacity(0.35), radius: 12, y: 6)
                     Text("OVPN 客户端").font(DS.Font.title).foregroundStyle(palette.foreground)
                     Text("首次使用请填写你的主控地址")
                         .font(DS.Font.bodySmall)
@@ -36,7 +33,7 @@ struct SetupView: View {
 
                 AppCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        AppTextField(title: "主控地址", placeholder: "http://你的域名或IP:端口",
+                        AppTextField(title: "主控地址", placeholder: "https://你的域名",
                                      text: $address, keyboard: .URL)
                         AppButton(title: "连接并继续", icon: "arrow.right", loading: loading) {
                             Task { await submit() }
@@ -44,7 +41,7 @@ struct SetupView: View {
                     }
                 }
 
-                Text("地址示例：http://211.101.236.116:3000\n客户端将使用该地址登录并获取线路")
+                Text("请填写主控面板的访问地址，例如 https://panel.example.com\n客户端将使用该地址登录并获取线路")
                     .font(DS.Font.caption)
                     .foregroundStyle(palette.mutedForeground)
                     .multilineTextAlignment(.center)
@@ -95,7 +92,7 @@ struct LoginView: View {
                 VStack(spacing: 8) {
                     RoundedRectangle(cornerRadius: DS.Radius.lg)
                         .fill(
-                            LinearGradient(colors: [DS.IconColor.emerald, DS.IconColor.teal],
+                            LinearGradient(colors: [DS.IconColor.green, DS.IconColor.teal],
                                            startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                         .frame(width: 52, height: 52)
@@ -104,7 +101,7 @@ struct LoginView: View {
                                 .font(.system(size: 24))
                                 .foregroundStyle(.white)
                         )
-                        .shadow(color: DS.IconColor.emerald.opacity(0.32), radius: 10, y: 5)
+                        .shadow(color: DS.IconColor.green.opacity(0.32), radius: 10, y: 5)
                     Text("登录账号").font(DS.Font.title).foregroundStyle(palette.foreground)
                     Text(app.masterURL)
                         .font(DS.Font.caption)

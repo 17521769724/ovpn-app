@@ -18,6 +18,7 @@ struct ProfileView: View {
             VStack(spacing: DS.Size.gapLarge) {
                 userCard(palette)
 
+                assetsStrip(palette)
                 trafficCard(palette)
                 sessionCard(palette)
                 menuCard(palette)
@@ -38,10 +39,13 @@ struct ProfileView: View {
             .padding(.bottom, 24)
         }
         .pageBackground()
-        .navigationTitle("我的")
+        .navigationTitle("个人中心")
         .navigationBarTitleDisplayMode(.large)
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable {
+            Haptics.refresh()
+            await load()
+        }
         .onChange(of: trafficDays) { _ in
             Task { await loadTraffic() }
         }
@@ -49,6 +53,51 @@ struct ProfileView: View {
             Button("取消", role: .cancel) {}
             Button("退出", role: .destructive) { app.logout() }
         }
+    }
+
+    // MARK: - 账户资产（等级 / 金币 / 余额）
+
+    /// 三格紧凑资产条：用渐变底 + 彩色图标呈现，与用户卡片形成视觉层次
+    private func assetsStrip(_ palette: Palette) -> some View {
+        HStack(spacing: 0) {
+            assetCell(palette, icon: "star.circle.fill", color: DS.IconColor.teal,
+                      title: "等级", value: "Lv.\(app.user?.levelValue ?? 1)")
+            assetDivider(palette)
+            assetCell(palette, icon: "bitcoinsign.circle.fill", color: DS.IconColor.amber,
+                      title: "金币", value: "\(app.user?.coinsValue ?? 0)")
+            assetDivider(palette)
+            assetCell(palette, icon: "creditcard.fill", color: DS.IconColor.green,
+                      title: "余额", value: String(format: "%.2f", app.user?.balanceYuanValue ?? 0))
+        }
+        .padding(.vertical, 14)
+        .background(
+            LinearGradient(
+                colors: [palette.primary.opacity(palette.scheme == .dark ? 0.20 : 0.12),
+                         DS.Brand.teal.opacity(0.06)],
+                startPoint: .leading, endPoint: .trailing
+            )
+        )
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl).stroke(palette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
+    }
+
+    private func assetCell(_ palette: Palette, icon: String, color: Color,
+                           title: String, value: String) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(color)
+            Text(value)
+                .font(.system(size: 16, weight: .semibold).monospacedDigit())
+                .foregroundStyle(palette.foreground)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(title).font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func assetDivider(_ palette: Palette) -> some View {
+        Rectangle().fill(palette.border).frame(width: 1, height: 34)
     }
 
     // MARK: - 用户卡片
@@ -59,7 +108,7 @@ struct ProfileView: View {
                 HStack(spacing: 12) {
                     Circle()
                         .fill(
-                            LinearGradient(colors: [DS.IconColor.emerald, DS.IconColor.teal],
+                            LinearGradient(colors: [DS.IconColor.green, DS.IconColor.teal],
                                            startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                         .frame(width: 48, height: 48)
@@ -108,16 +157,16 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     IconTile(icon: "chart.bar.fill", color: DS.Traffic.barStrong)
-                    SectionHeader(title: "流量使用", subtitle: "近 \(trafficDays) 天")
+                    SectionHeader(title: "流量使用")
                     Spacer()
                     SegmentedTabs(
-                        items: ["近 7 天", "近 15 天"],
+                        items: ["近7天", "近15天"],
                         selection: Binding(
                             get: { trafficDays == 7 ? 0 : 1 },
                             set: { trafficDays = $0 == 0 ? 7 : 15 }
                         )
                     )
-                    .frame(width: 150)
+                    .frame(width: 148)
                 }
 
                 if let center {
@@ -183,7 +232,7 @@ struct ProfileView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
-                    IconTile(icon: "antenna.radiowaves.left.and.right", color: DS.IconColor.sky)
+                    IconTile(icon: "antenna.radiowaves.left.and.right", color: DS.IconColor.cyan)
                     SectionHeader(title: "在线会话", subtitle: "当前账号的连接")
                 }
                 let sessions = center?.onlineSessions ?? []
@@ -232,13 +281,13 @@ struct ProfileView: View {
                 menuRow(palette, icon: "ticket.fill", color: DS.IconColor.amber, title: "激活码",
                         destination: AnyView(ActivationView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "bitcoinsign.circle.fill", color: DS.IconColor.orange, title: "金币与邀请",
+                menuRow(palette, icon: "bitcoinsign.circle.fill", color: DS.IconColor.orange, title: "金币记录",
                         destination: AnyView(CoinsView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "exclamationmark.bubble.fill", color: DS.IconColor.blue, title: "问题反馈",
+                menuRow(palette, icon: "exclamationmark.bubble.fill", color: DS.IconColor.cyan, title: "问题反馈",
                         destination: AnyView(FeedbackView().environmentObject(app)))
                 divider(palette)
-                menuRow(palette, icon: "doc.text.fill", color: DS.IconColor.sky, title: "我的订单",
+                menuRow(palette, icon: "doc.text.fill", color: DS.IconColor.cyan, title: "我的订单",
                         destination: AnyView(OrdersView().environmentObject(app)))
                 divider(palette)
                 menuRow(palette, icon: "gearshape.fill", color: DS.IconColor.slate, title: "账号设置",
@@ -252,7 +301,7 @@ struct ProfileView: View {
         NavigationLink(destination: destination) {
             MenuRow(icon: icon, iconColor: color, title: title, subtitle: subtitle)
         }
-        .buttonStyle(PressableStyle(scale: 0.98, haptic: true))
+        .buttonStyle(PressableStyle(scale: 0.98))
     }
 
     private func divider(_ palette: Palette) -> some View {

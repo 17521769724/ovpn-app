@@ -45,10 +45,10 @@ struct MainTabView: View {
     @State private var tab: Int = 0
 
     private let items: [(icon: String, activeIcon: String, title: String, color: Color)] = [
-        ("bolt.horizontal.circle", "bolt.horizontal.circle.fill", "线路", DS.IconColor.sky),
-        ("shippingbox", "shippingbox.fill", "套餐", DS.IconColor.violet),
-        ("person.badge.plus", "person.badge.plus", "邀请", DS.IconColor.teal),
-        ("person.crop.circle", "person.crop.circle.fill", "我的", DS.IconColor.emerald),
+        ("bolt.horizontal.circle", "bolt.horizontal.circle.fill", "线路", DS.IconColor.green),
+        ("shippingbox", "shippingbox.fill", "套餐", DS.IconColor.teal),
+        ("person.badge.plus", "person.badge.plus", "邀请", DS.IconColor.lime),
+        ("person.crop.circle", "person.crop.circle.fill", "我的", DS.IconColor.cyan),
     ]
 
     var body: some View {
@@ -93,7 +93,7 @@ struct MainTabView: View {
                     .frame(height: DS.Size.tabBarHeight)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(PressableStyle(scale: 0.88, haptic: true))
+                .buttonStyle(PressableStyle(scale: 0.88))
             }
         }
         .background(palette.background)

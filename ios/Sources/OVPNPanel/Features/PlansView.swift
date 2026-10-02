@@ -15,10 +15,6 @@ struct PlansView: View {
         let palette = Palette(scheme: scheme)
         ScrollView {
             VStack(spacing: DS.Size.gapLarge) {
-                if let user = payload?.user {
-                    walletCard(palette, user: user)
-                }
-
                 if let payload, !payload.purchaseEnabled {
                     BannerBar(message: "站点当前已关闭购买功能", kind: .warning)
                 }
@@ -40,15 +36,11 @@ struct PlansView: View {
         .pageBackground()
         .navigationTitle("套餐中心")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                IconActionButton(icon: "arrow.clockwise", loading: loading) {
-                    Task { await load() }
-                }
-            }
-        }
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable {
+            Haptics.refresh()
+            await load()
+        }
         .sheet(isPresented: Binding(
             get: { payURL != nil },
             set: { if !$0 { payURL = nil } }
@@ -59,31 +51,7 @@ struct PlansView: View {
         }
     }
 
-    /// 账户概览：等级 / 金币 / 余额（替代原先的在线节点信息）
-    private func walletCard(_ palette: Palette, user: PlansPayload.PlanUser) -> some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    IconTile(icon: "creditcard.fill", color: DS.IconColor.violet)
-                    SectionHeader(title: "我的账户", subtitle: "金币可用于兑换下方支持的套餐")
-                }
-                HStack(spacing: 0) {
-                    walletMetric(palette, title: "我的等级", value: "Lv.\(user.level)", color: DS.IconColor.violet)
-                    walletMetric(palette, title: "我的金币", value: "\(user.coins)", color: DS.IconColor.orange)
-                    walletMetric(palette, title: "账户余额",
-                                 value: String(format: "%.2f", user.balanceYuan), color: DS.IconColor.emerald)
-                }
-            }
-        }
-    }
-
-    private func walletMetric(_ palette: Palette, title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(DS.Font.caption).foregroundStyle(palette.mutedForeground)
-            Text(value).font(.system(size: 17, weight: .semibold)).foregroundStyle(color)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
+    /// 账户概览（等级 / 金币 / 余额）已移至「我的」页面，此处不再重复展示
 
     private func planCard(_ palette: Palette, plan: PlanItem) -> some View {
         AppCard {
@@ -91,7 +59,7 @@ struct PlansView: View {
                 HStack(alignment: .top) {
                     HStack(spacing: 10) {
                         IconTile(icon: plan.isCurrent ? "checkmark.seal.fill" : "gift.fill",
-                                 color: plan.isCurrent ? DS.IconColor.emerald : DS.IconColor.violet)
+                                 color: plan.isCurrent ? DS.IconColor.green : DS.IconColor.teal)
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Text(plan.name).font(DS.Font.section).foregroundStyle(palette.foreground)
@@ -100,8 +68,8 @@ struct PlansView: View {
                                 }
                             }
                             StatusBadge(text: "赠 Lv.\(plan.levelValue)",
-                                        background: DS.IconColor.violet.opacity(0.14),
-                                        foreground: DS.IconColor.violet)
+                                        background: DS.IconColor.teal.opacity(0.14),
+                                        foreground: DS.IconColor.teal)
                         }
                     }
                     Spacer()
@@ -254,7 +222,10 @@ struct OrdersView: View {
         .navigationTitle("我的订单")
         .navigationBarTitleDisplayMode(.large)
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable {
+            Haptics.refresh()
+            await load()
+        }
         .onReceive(ticker) { value in
             now = value
             // 有 pending 订单倒计时结束：自动刷新一次列表状态
@@ -328,7 +299,7 @@ struct OrdersView: View {
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 38)
                                 .foregroundStyle(.white)
-                                .background(DS.IconColor.emerald)
+                                .background(DS.IconColor.green)
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                             }
                             .buttonStyle(PressableStyle(scale: 0.97))
@@ -367,10 +338,10 @@ struct OrdersView: View {
 
     private func orderColor(_ order: OrderItem) -> Color {
         switch order.status {
-        case "paid": return DS.IconColor.emerald
+        case "paid": return DS.IconColor.green
         case "pending": return DS.IconColor.amber
         case "cancelled", "expired": return DS.IconColor.slate
-        default: return DS.IconColor.sky
+        default: return DS.IconColor.cyan
         }
     }
 
