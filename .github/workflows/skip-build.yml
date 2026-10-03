@@ -102,21 +102,36 @@ jobs:
           set -o pipefail
           gradle :app:assembleRelease --no-daemon --stacktrace --warning-mode none 2>&1 | tee -a /tmp/gradle.log | tail -60
 
-      - name: 校验 APK 信息
-        working-directory: ${{ env.SKIP_APP_DIR }}/Android
+      - name: 收集并校验 APK
+        working-directory: ${{ env.SKIP_APP_DIR }}
         run: |
           set -e
-          APK="$(find app/build/outputs/apk -name '*.apk' | head -1)"
-          echo "APK: $APK"
-          ls -lh app/build/outputs/apk/*/*.apk || true
+          # Skip 的 Gradle 会重定向构建目录，APK 位置不固定在 Android/app/build 下，
+          # 这里全量查找后统一复制到固定路径，保证产物一定被收集到。
+          echo "=== 构建目录下所有 APK ==="
+          find . -name '*.apk' -not -path '*/.gradle/*' -print > /tmp/apks.txt 2>/dev/null || true
+          cat /tmp/apks.txt || true
+          APK=""
+          while read -r f; do
+            case "$f" in
+              *release*) APK="$f"; break ;;
+            esac
+          done < /tmp/apks.txt
+          if [ -z "$APK" ]; then APK="$(head -1 /tmp/apks.txt)"; fi
+          if [ -z "$APK" ]; then echo "::error::未找到 APK 产物"; exit 1; fi
+          echo "选中 APK: $APK"
+          mkdir -p "$GITHUB_WORKSPACE/dist-android"
+          cp "$APK" "$GITHUB_WORKSPACE/dist-android/OVPNPanel-android.apk"
+          ls -lh "$GITHUB_WORKSPACE/dist-android/"
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | tail -1)"
-          "$BT/aapt" dump badging "$APK" | grep -E "^package|sdkVersion|targetSdkVersion|application-label" || true
+          "$BT/aapt" dump badging "$GITHUB_WORKSPACE/dist-android/OVPNPanel-android.apk" \
+            | grep -E "^package|sdkVersion|targetSdkVersion|application-label" || true
 
       - name: 上传 APK 产物
         uses: actions/upload-artifact@v4
         with:
           name: OVPNPanel-apk
-          path: ${{ env.SKIP_APP_DIR }}/Android/app/build/outputs/apk/**/*.apk
+          path: dist-android/OVPNPanel-android.apk
           retention-days: 30
 
       - name: 失败时输出构建日志摘要

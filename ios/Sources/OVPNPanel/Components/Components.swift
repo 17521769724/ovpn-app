@@ -127,6 +127,9 @@ struct PageBackground: ViewModifier {
             // 未被消费的点击落到最底层背景上触发收起。
             .contentShape(Rectangle())
             .onTapGesture { Keyboard.dismiss() }
+            // 兜底：页面内容（滚动视图）铺满全屏时点击会先命中内容区，
+            // 此时通过「开始滚动即收起键盘」保证输入法一定能被收起。
+            .scrollDismissesKeyboard(.immediately)
             .overlay(content)
     }
 }
