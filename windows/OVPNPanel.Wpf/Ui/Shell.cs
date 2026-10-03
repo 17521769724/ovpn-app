@@ -298,7 +298,8 @@ namespace OVPNPanel.Core
                 Height = 34,
                 CornerRadius = new CornerRadius(10),
                 Background = new LinearGradientBrush(palette.Primary, DS.IconColor.Teal, 45),
-                Child = new Grid { Children = { Ui.Icon("shieldFill", 17, Colors.White, 2) } },
+                // 注意：本类内的 `Colors` 字段是页签配色数组，会遮蔽 System.Windows.Media.Colors
+                Child = new Grid { Children = { Ui.Icon("shieldFill", 17, System.Windows.Media.Colors.White, 2) } },
             };
             var brandText = Ui.Text("OVPN 面板", 15, FontWeights.SemiBold, palette.Foreground);
             brandText.VerticalAlignment = VerticalAlignment.Center;
