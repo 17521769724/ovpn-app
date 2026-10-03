@@ -55,7 +55,12 @@ final class APIClient {
     func setBaseURL(_ url: String) {
         var trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         while trimmed.hasSuffix("/") {
+            #if SKIP
+            // Kotlin 的 String 没有 removeLast（SkipLib 提供的是 dropLast）
+            trimmed = trimmed.dropLast()
+            #else
             trimmed.removeLast()
+            #endif
         }
         baseURL = trimmed
     }
@@ -90,6 +95,15 @@ final class APIClient {
         return request
     }
 
+    /// 发送请求并把网络错误统一归一（供 request 使用）
+    private func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(for: request)
+        } catch {
+            throw APIError.from(error)
+        }
+    }
+
     /// 执行请求并返回 data 段
     func request<T: Decodable>(
         _ path: String,
@@ -99,13 +113,10 @@ final class APIClient {
         as type: T.Type
     ) async throws -> T {
         let request = try makeRequest(path: path, method: method, query: query, body: body)
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw APIError.from(error)
-        }
+        // 通过辅助方法返回元组：Kotlin 端不允许对已声明的 val 二次赋值（原先的 (data, response) = ... 写法无法转译）
+        let outcome = try await send(request)
+        let data = outcome.0
+        let response = outcome.1
 
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
         let decoder = JSONDecoder()
@@ -122,9 +133,14 @@ final class APIClient {
             throw APIError.server(envelope.message.isEmpty ? "请求失败" : envelope.message)
         }
         guard let payload = envelope.data else {
-            // data 为空但需要返回值的场景（如 {ok:true} 之外的 null）
+            // data 为空但需要返回值的场景（requestVoid → EmptyPayload）
+            #if SKIP
+            // Kotlin 泛型运行时擦除，无法做 `as? T` 判断；该分支仅 EmptyPayload 场景会走到
+            return EmptyPayload() as! T
+            #else
             if let empty = EmptyPayload() as? T { return empty }
             throw APIError.decoding("响应缺少 data")
+            #endif
         }
         do {
             let raw = try JSONSerialization.data(withJSONObject: payload.value)

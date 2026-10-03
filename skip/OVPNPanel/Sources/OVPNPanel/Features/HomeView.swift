@@ -367,7 +367,7 @@ struct HomeView: View {
                         .background(palette.primary.opacity(0.14))
                         .clipShape(Capsule())
                     }
-                    .buttonStyle(PressableStyle())
+                    .pressableStyle()
                 }
             }
 
@@ -384,7 +384,7 @@ struct HomeView: View {
                     } label: {
                         serverCard(palette, node: node)
                     }
-                    .buttonStyle(PressableStyle(scale: 0.98))
+                    .pressableStyle(scale: 0.98)
                     .disabled(!node.usable)
                 }
             }
@@ -474,7 +474,7 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: DS.Radius.xl)
                 .stroke(isSelected ? palette.primary : Color.clear, lineWidth: 1.5)
         )
-        .opacity(node.usable ? 1 : 0.8)
+        .opacity(node.usable ? 1.0 : 0.8)
     }
 
     /// 单行地址展示（IPv4 / IPv6）
@@ -553,7 +553,7 @@ struct HomeView: View {
                         .background(palette.accentGradient)
                         .clipShape(Capsule())
                     }
-                    .buttonStyle(PressableStyle())
+                    .pressableStyle()
                 }
                 .padding(10)
                 .background(palette.muted.opacity(0.5))
@@ -595,7 +595,7 @@ struct HomeView: View {
                     } label: {
                         lineCard(palette, line: line)
                     }
-                    .buttonStyle(PressableStyle(scale: 0.98))
+                    .pressableStyle(scale: 0.98)
                 }
             }
         }
@@ -984,10 +984,10 @@ private struct ConnectRing: View {
                     style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
                 )
                 .frame(width: size - ringWidth, height: size - ringWidth)
-                .opacity(isConnected ? 1 : (isBusy ? 0.9 : 0.32))
-                .rotationEffect(.degrees(sweep ? 360 : 0))
+                .opacity(isConnected ? 1.0 : (isBusy ? 0.9 : 0.32))
+                .rotationEffect(.degrees(sweep ? 360.0 : 0.0))
                 .animation(
-                    .linear(duration: isBusy ? 1.6 : 16).repeatForever(autoreverses: false),
+                    .linear(duration: isBusy ? 1.6 : 16.0).repeatForever(autoreverses: false),
                     value: sweep
                 )
 
@@ -1003,9 +1003,9 @@ private struct ConnectRing: View {
                         style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
                     )
                     .frame(width: size - ringWidth, height: size - ringWidth)
-                    .rotationEffect(.degrees(sweep ? 360 : 0))
+                    .rotationEffect(.degrees(sweep ? 360.0 : 0.0))
                     .animation(
-                        .linear(duration: isBusy ? 1.3 : 6).repeatForever(autoreverses: false),
+                        .linear(duration: isBusy ? 1.3 : 6.0).repeatForever(autoreverses: false),
                         value: sweep
                     )
                     .opacity(isBusy ? 0.9 : 0.45)
@@ -1032,7 +1032,7 @@ private struct ConnectRing: View {
                     Image(systemName: isBusy ? "arrow.triangle.2.circlepath" : "power")
                         .font(.system(size: 30, weight: .semibold))
                         .foregroundStyle(tint)
-                        .rotationEffect(.degrees(isBusy && sweep ? 360 : 0))
+                        .rotationEffect(.degrees(isBusy && sweep ? 360.0 : 0.0))
                         .animation(
                             .linear(duration: 1.2).repeatForever(autoreverses: false),
                             value: sweep

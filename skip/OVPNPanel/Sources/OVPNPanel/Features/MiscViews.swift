@@ -64,6 +64,7 @@ struct AnnouncementsView: View {
         .pageBackground()
         .navigationTitle("公告")
         .navigationBarTitleDisplayMode(.large)
+        .withBackLabel()
         .task { await load() }
         .refreshable {
             Haptics.refresh()
@@ -162,6 +163,7 @@ struct ActivationView: View {
         .pageBackground()
         .navigationTitle("激活码")
         .navigationBarTitleDisplayMode(.large)
+        .withBackLabel()
         .task { await load() }
     }
 
@@ -222,6 +224,7 @@ struct CoinsView: View {
         .pageBackground()
         .navigationTitle("金币记录")
         .navigationBarTitleDisplayMode(.large)
+        .withBackLabel()
         .task { await load() }
         .refreshable {
             Haptics.refresh()
@@ -266,7 +269,9 @@ struct CoinsView: View {
                         .foregroundStyle(palette.mutedForeground)
                         .padding(.vertical, 4)
                 } else {
-                    ForEach(Array((payload?.logs ?? []).enumerated()), id: \.offset) { index, log in
+                    let logs = payload?.logs ?? []
+                    ForEach(Array(logs.indices), id: \.self) { index in
+                        let log = logs[index]
                         if index > 0 {
                             Rectangle().fill(palette.border).frame(height: 1)
                         }
@@ -402,6 +407,7 @@ struct FeedbackView: View {
         .pageBackground()
         .navigationTitle("问题反馈")
         .navigationBarTitleDisplayMode(.large)
+        .withBackLabel()
         .task { await load() }
     }
 
@@ -549,7 +555,7 @@ struct InviteView: View {
                     }
                     if !urlString.isEmpty, let url = URL(string: urlString) {
                         ShareLink(item: url) { shareLabel(palette) }
-                            .buttonStyle(PressableStyle())
+                            .pressableStyle()
                     } else {
                         // 未就绪时占位（保持布局稳定，不可点击）
                         shareLabel(palette).opacity(0.45)
@@ -692,6 +698,7 @@ struct AccountSettingsView: View {
         .pageBackground()
         .navigationTitle("账号设置")
         .navigationBarTitleDisplayMode(.large)
+        .withBackLabel()
         .task {
             guard !loaded else { return }
             loaded = true

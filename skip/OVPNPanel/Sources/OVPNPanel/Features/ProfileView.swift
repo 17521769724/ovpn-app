@@ -360,7 +360,7 @@ struct ProfileView: View {
         NavigationLink(destination: destination) {
             MenuRow(icon: icon, iconColor: color, title: title, subtitle: subtitle, badge: badge)
         }
-        .buttonStyle(PressableStyle(scale: 0.98))
+        .pressableStyle(scale: 0.98)
     }
 
     private func divider(_ palette: Palette) -> some View {

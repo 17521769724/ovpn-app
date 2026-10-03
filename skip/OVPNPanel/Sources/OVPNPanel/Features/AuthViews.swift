@@ -221,7 +221,7 @@ struct RegisterView: View {
                                             }
                                         }
                                     }
-                                    .buttonStyle(PlainButtonStyle())
+                                    .plainPressableStyle()
                                 }
                                 Text("看不清？点击橙色方块刷新验证码")
                                     .font(DS.Font.caption)

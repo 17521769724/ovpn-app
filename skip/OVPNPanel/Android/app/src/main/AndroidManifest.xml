@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 轻触震动反馈（下拉刷新 / 连接结果，对应 iOS 的 Haptics） -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- 保证在有 Chrome / 浏览器的设备上能打开支付页 -->
     <queries>
         <intent>

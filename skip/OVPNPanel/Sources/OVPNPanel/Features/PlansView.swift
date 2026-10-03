@@ -183,7 +183,7 @@ struct PlansView: View {
                             } label: {
                                 targetRow(palette, option: option, selected: payTarget == option.id)
                             }
-                            .buttonStyle(PressableStyle(scale: 0.98))
+                            .pressableStyle(scale: 0.98)
                             .disabled(option.disabled)
                         }
                     }
@@ -219,7 +219,7 @@ struct PlansView: View {
                                         .background(selectedMethod == option.id ? palette.primary : palette.muted.opacity(0.6))
                                         .clipShape(Capsule())
                                     }
-                                    .buttonStyle(PressableStyle(scale: 0.96))
+                                    .pressableStyle(scale: 0.96)
                                 }
                                 Spacer(minLength: 0)
                             }
@@ -301,7 +301,7 @@ struct PlansView: View {
                 .stroke(selected ? palette.primary : palette.border, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-        .opacity(option.disabled ? 0.6 : 1)
+        .opacity(option.disabled ? 0.6 : 1.0)
     }
 
     /// 账户概览（等级 / 金币 / 余额）已移至「我的」页面，此处不再重复展示
@@ -479,6 +479,7 @@ struct OrdersView: View {
         .pageBackground()
         .navigationTitle("我的订单")
         .navigationBarTitleDisplayMode(.large)
+        .withBackLabel()
         .task { await load() }
         .refreshable {
             Haptics.refresh()
@@ -560,7 +561,7 @@ struct OrdersView: View {
                                 .background(DS.IconColor.green)
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                             }
-                            .buttonStyle(PressableStyle(scale: 0.97))
+                            .pressableStyle(scale: 0.97)
                             .disabled(busyId != nil)
                         }
                         Button {
@@ -575,7 +576,7 @@ struct OrdersView: View {
                                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg).stroke(palette.border, lineWidth: 1))
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                         }
-                        .buttonStyle(PressableStyle(scale: 0.97))
+                        .pressableStyle(scale: 0.97)
                         .disabled(busyId != nil)
                     }
                 }
@@ -737,7 +738,8 @@ struct RechargeView: View {
                                          text: $amountText, keyboard: UIKeyboardType.decimalPad)
                             // 快捷金额：金额与单位同一行展示，每行 3 个（三端一致）
                             VStack(alignment: .leading, spacing: 8) {
-                                ForEach(Array(quickAmountRows.enumerated()), id: \.offset) { _, rowValues in
+                                ForEach(Array(quickAmountRows.indices), id: \.self) { rowIndex in
+                                    let rowValues = quickAmountRows[rowIndex]
                                     HStack(spacing: 8) {
                                         ForEach(rowValues, id: \.self) { value in
                                             let text = String(format: "%.0f", value)
@@ -754,7 +756,7 @@ struct RechargeView: View {
                                                     .background(amountText == text ? palette.primary : palette.muted.opacity(0.6))
                                                     .clipShape(Capsule())
                                             }
-                                            .buttonStyle(PressableStyle(scale: 0.96))
+                                            .pressableStyle(scale: 0.96)
                                         }
                                         Spacer(minLength: 0)
                                     }
@@ -782,7 +784,7 @@ struct RechargeView: View {
                                     } label: {
                                         rechargeTargetRow(palette, option: option, selected: payTarget == option.id)
                                     }
-                                    .buttonStyle(PressableStyle(scale: 0.98))
+                                    .pressableStyle(scale: 0.98)
                                 }
                             }
 
@@ -808,7 +810,7 @@ struct RechargeView: View {
                                             .background(selectedMethod == option.id ? palette.primary : palette.muted.opacity(0.6))
                                             .clipShape(Capsule())
                                         }
-                                        .buttonStyle(PressableStyle(scale: 0.96))
+                                        .pressableStyle(scale: 0.96)
                                     }
                                     Spacer(minLength: 0)
                                 }
@@ -838,6 +840,7 @@ struct RechargeView: View {
         .pageBackground()
         .navigationTitle("余额充值")
         .navigationBarTitleDisplayMode(.large)
+        .withBackLabel()
         .task { await load() }
         .refreshable { await load() }
         .sheet(isPresented: Binding(

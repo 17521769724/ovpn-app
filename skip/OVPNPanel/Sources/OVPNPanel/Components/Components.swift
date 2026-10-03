@@ -3,6 +3,10 @@ import SwiftUI
 #if SKIP
 // Skip：Android 侧用系统浏览器打开支付页（见 Android 模块 IntentLauncher.kt）
 import com.ovpn.panel.IntentLauncher
+// Skip：Android 侧震动反馈等价替代（见 Android 模块 HapticsBridge.kt）
+import com.ovpn.panel.HapticsBridge
+// Skip：Android 侧收起软键盘（见 Android 模块 KeyboardBridge.kt）
+import com.ovpn.panel.KeyboardBridge
 #endif
 
 // MARK: - 内置浏览器（支付跳转用）
@@ -103,44 +107,145 @@ struct FlowLayout: Layout {
 enum Haptics {
     /// 下拉刷新触发时的轻微反馈
     static func refresh() {
+        #if SKIP
+        // Android：系统振动器等价替代（见 Kotlin HapticsBridge）
+        HapticsBridge.shared.light()
+        #else
         UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.7)
+        #endif
     }
 
     /// 线路连接成功
     static func connected() {
+        #if SKIP
+        HapticsBridge.shared.success()
+        #else
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
     }
 
     /// 线路连接失败
     static func connectFailed() {
+        #if SKIP
+        HapticsBridge.shared.error()
+        #else
         UINotificationFeedbackGenerator().notificationOccurred(.error)
+        #endif
     }
 
     /// 断开线路
     static func disconnected() {
+        #if SKIP
+        HapticsBridge.shared.light()
+        #else
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
     }
 }
 
+#if !SKIP
 /// 卡片/列表行等自定义可点元素的按下反馈（仅缩放，不震动）
 struct PressableStyle: ButtonStyle {
     var scale: CGFloat = 0.97
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
+            .scaleEffect(configuration.isPressed ? scale : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
             .animation(Animation.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+#endif
+
+extension View {
+    /// 统一点击反馈。
+    ///
+    /// - iOS：自定义缩放 + 透明度变化的 `PressableStyle`
+    /// - Android：SkipUI 的 `ButtonStyle` 是内置样式集合（不支持自定义 ButtonStyle），
+    ///   改用系统默认按键样式（Material 涟漪），作为等价替代
+    func pressableStyle(scale: CGFloat = 0.97) -> some View {
+        #if SKIP
+        return self.buttonStyle(.plain)
+        #else
+        return self.buttonStyle(PressableStyle(scale: scale))
+        #endif
+    }
+
+    /// 去掉默认按钮高亮的场景（如验证码刷新按钮）
+    func plainPressableStyle() -> some View {
+        #if SKIP
+        return self.buttonStyle(.plain)
+        #else
+        return self.buttonStyle(PlainButtonStyle())
+        #endif
     }
 }
 
 // MARK: - 页面容器
 
+/// Android：在导航栏返回箭头右侧补上「返回」字样。
+///
+/// iOS 原生返回按钮自带「‹ 上一页标题」，无需处理；
+/// SkipUI（Android）只绘制返回箭头，这里补上文字，保证与 iOS 观感一致。
+struct BackLabelModifier: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+
+    func body(content: Content) -> some View {
+        #if SKIP
+        content.toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    Text("返回").font(DS.Font.body)
+                }
+                .plainPressableStyle()
+            }
+        }
+        #else
+        content
+        #endif
+    }
+}
+
+extension View {
+    /// 推送页面统一挂载：Android 侧显示「返回」文字（见 BackLabelModifier）
+    func withBackLabel() -> some View { modifier(BackLabelModifier()) }
+}
+
 struct PageBackground: ViewModifier {
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
-        Palette(scheme: scheme).background.ignoresSafeArea().overlay(content)
+        #if SKIP
+        // Android：点击空白处收起软键盘（等价 iOS 的 resignFirstResponder）；
+        // 同时关闭边缘上拉/下拉的拉伸（stretch overscroll）动画——下拉刷新由 .refreshable 独立实现，不受影响
+        Palette(scheme: scheme).background
+            .ignoresSafeArea()
+            .onTapGesture { Keyboard.dismiss() }
+            .androidVerticalOverscrollPullDown(isEnabled: false, onPull: { _ in }, onEnd: {})
+            .overlay(content)
+        #else
+        Palette(scheme: scheme).background
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { Keyboard.dismiss() }
+            .overlay(content)
+        #endif
+    }
+}
+
+/// 收起键盘：向当前第一响应者发送 resignFirstResponder（iOS）/ 隐藏输入法（Android）
+enum Keyboard {
+    static func dismiss() {
+        #if SKIP
+        KeyboardBridge.shared.dismiss()
+        #else
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
+        #endif
     }
 }
 
@@ -185,14 +290,14 @@ struct AppButton: View {
             .background(background(palette))
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.lg)
-                    .stroke(strokeColor(palette), lineWidth: style == .outline ? 1 : 0)
+                    .stroke(strokeColor(palette), lineWidth: style == .outline ? 1.0 : 0.0)
             )
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
             .shadow(color: shadowColor(palette), radius: 8, y: 3)
         }
-        .buttonStyle(PressableStyle())
+        .pressableStyle()
         .disabled(disabled || loading)
-        .opacity(disabled ? 0.5 : 1)
+        .opacity(disabled ? 0.5 : 1.0)
     }
 
     private func foreground(_ palette: Palette) -> Color {
@@ -247,11 +352,11 @@ struct ChipButton: View {
                 .background(selected ? AnyView(palette.accentGradient) : AnyView(palette.card))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .stroke(palette.border, lineWidth: selected ? 0 : 1)
+                        .stroke(palette.border, lineWidth: selected ? 0.0 : 1.0)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
         }
-        .buttonStyle(PressableStyle())
+        .pressableStyle()
     }
 }
 
@@ -282,7 +387,8 @@ struct SegmentedTabs: View {
     var body: some View {
         let palette = Palette(scheme: scheme)
         HStack(spacing: 2) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+            ForEach(Array(items.indices), id: \.self) { index in
+                let item = items[index]
                 Button {
                     selection = index
                 } label: {
@@ -293,13 +399,13 @@ struct SegmentedTabs: View {
                         .background(
                             RoundedRectangle(cornerRadius: DS.Radius.sm)
                                 .fill(selection == index ? palette.card : Color.clear)
-                                .shadow(color: .black.opacity(selection == index ? 0.08 : 0), radius: 3, y: 1)
+                                .shadow(color: .black.opacity(selection == index ? 0.08 : 0.0), radius: 3, y: 1)
                         )
 #if !SKIP
                         .contentShape(Rectangle())
 #endif
                 }
-                .buttonStyle(PressableStyle(scale: 0.96))
+                .pressableStyle(scale: 0.96)
             }
         }
         .padding(2)
@@ -332,7 +438,7 @@ struct AppTextField: View {
 #if !SKIP
                         .autocapitalization(.none)
 #endif
-                        .disableAutocorrection(true)
+                        .autocorrectionDisabled(true)
                 }
             }
             .font(DS.Font.body)
@@ -642,20 +748,27 @@ struct ToastHost: View {
                 ToastCard(message: toast)
                     .padding(.horizontal, DS.Size.pagePadding)
                     .padding(.top, 6)
-                    .transition(
-                        .asymmetric(
-                            insertion: AnyTransition
-                                .scale(scale: 0.97, anchor: UnitPoint.top)
-                                .combined(with: AnyTransition.opacity),
-                            removal: AnyTransition.opacity
-                        )
-                    )
+                    .transition(toastTransition)
                     .onTapGesture { app.dismissToast() }
             }
             Spacer()
         }
         .animation(Animation.spring(response: 0.32, dampingFraction: 0.9), value: app.toast)
         .allowsHitTesting(app.toast != nil)
+    }
+
+    /// 横幅入场过渡：iOS 使用带锚点的缩放 + 淡入；Skip 未实现带 anchor 的 scale，改用等价缩放 + 淡入
+    private var toastTransition: AnyTransition {
+        #if SKIP
+        return AnyTransition.scale(0.97).combined(with: AnyTransition.opacity)
+        #else
+        return AnyTransition.asymmetric(
+            insertion: AnyTransition
+                .scale(scale: 0.97, anchor: UnitPoint.top)
+                .combined(with: AnyTransition.opacity),
+            removal: AnyTransition.opacity
+        )
+        #endif
     }
 }
 

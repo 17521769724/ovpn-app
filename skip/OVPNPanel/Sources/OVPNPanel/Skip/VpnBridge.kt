@@ -45,6 +45,17 @@ object VpnBridge {
     @Volatile
     private var activeTitleValue: String = ""
 
+    /**
+     * 等待系统 VPN 授权完成后自动续连的任务。
+     *
+     * 首次连接时系统会弹出授权窗口（从当前 Activity 启动）；
+     * 用户点击「允许」后宿主 Activity 会重新 onResume，
+     * 此时 [onHostResumed] 检测到已授权便自动继续连接——
+     * 与 iOS「系统授权弹窗 → 授权后自动建连」的交互一致。
+     */
+    @Volatile
+    private var pendingConnect: (() -> Unit)? = null
+
     /** 当前状态（Swift 侧 `syncStatus()` 读取） */
     val currentStatus: String get() = statusValue
 
@@ -88,7 +99,7 @@ object VpnBridge {
 
     /**
      * 建立隧道。
-     * 与 iOS 相同：首次连接会触发系统授权，授权后再调用一次即可。
+     * 与 iOS 相同：首次连接会触发系统授权，授权完成后自动继续连接。
      */
     @Throws(Exception::class)
     fun connect(ovpn: String, username: String, password: String, title: String) {
@@ -98,15 +109,37 @@ object VpnBridge {
         // 未授权时先请求系统 VPN 授权（等价于 iOS 的系统授权弹窗）
         val consent = VpnService.prepare(context)
         if (consent != null) {
-            runCatching {
+            pendingConnect = { startTunnel(ovpn, username, password, title) }
+            val activity = AppEnv.currentActivity
+            if (activity != null) {
+                // 从当前 Activity 启动：保证授权窗口一定弹出（后台启动 Activity 会被系统拦截）
+                activity.startActivity(consent)
+            } else {
                 consent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(consent)
             }
             statusValue = S_DISCONNECTED
             notifyCurrent()
-            throw IllegalStateException("需要授权 VPN 连接，请在弹出的系统窗口中允许后重试")
+            return
         }
 
+        startTunnel(ovpn, username, password, title)
+    }
+
+    /** 宿主 Activity 回到前台：若正在等待系统 VPN 授权且已授权，自动继续建连 */
+    fun onHostResumed() {
+        val pending = pendingConnect ?: return
+        if (VpnService.prepare(AppEnv.appContext) == null) {
+            pendingConnect = null
+            pending()
+        } else {
+            // 用户拒绝授权：清理等待任务，界面保持未连接，可再次点击连接重新请求
+            pendingConnect = null
+        }
+    }
+
+    /** 真正建立隧道（凭据内联进 .ovpn 配置） */
+    private fun startTunnel(ovpn: String, username: String, password: String, title: String) {
         activeTitleValue = title
         statusValue = S_CONNECTING
         notifyCurrent()
@@ -128,12 +161,13 @@ object VpnBridge {
             throw IllegalStateException("线路配置解析失败：${e.message ?: "格式不支持"}")
         }
 
-        connection = OpenVPNConnection(context, stateListener)
+        connection = OpenVPNConnection(AppEnv.appContext, stateListener)
         connection?.start(config)
     }
 
     /** 断开隧道（对应 iOS `VPNManager.disconnect()`） */
     fun disconnect() {
+        pendingConnect = null
         statusValue = S_DISCONNECTING
         notifyCurrent()
         connection?.stop()

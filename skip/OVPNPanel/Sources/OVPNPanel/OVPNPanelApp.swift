@@ -94,7 +94,8 @@ struct MainTabView: View {
 
     private func tabBar(_ palette: Palette) -> some View {
         HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+            ForEach(Array(items.indices), id: \.self) { index in
+                let item = items[index]
                 Button {
                     withAnimation(Animation.spring(response: 0.32, dampingFraction: 0.82)) { tab = index }
                 } label: {
@@ -102,7 +103,7 @@ struct MainTabView: View {
                         Image(systemName: tab == index ? item.activeIcon : item.icon)
                             .font(.system(size: 19, weight: tab == index ? .semibold : .regular))
                             .foregroundStyle(tab == index ? item.color : palette.mutedForeground)
-                            .scaleEffect(tab == index ? 1.06 : 1)
+                            .scaleEffect(tab == index ? 1.06 : 1.0)
                         Text(item.title)
                             .font(.system(size: 11, weight: tab == index ? .semibold : .regular))
                             .foregroundStyle(tab == index ? palette.foreground : palette.mutedForeground)
@@ -113,7 +114,7 @@ struct MainTabView: View {
                     .contentShape(Rectangle())
 #endif
                 }
-                .buttonStyle(PressableStyle(scale: 0.88))
+                .pressableStyle(scale: 0.88)
             }
         }
         .background(palette.background)

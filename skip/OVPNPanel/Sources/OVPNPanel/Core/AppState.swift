@@ -73,9 +73,20 @@ final class AppState: ObservableObject {
         api.setBaseURL(normalized)
         phase = .auth
         if let credentials = LaunchArgs.value("-autoLogin") {
-            let parts = credentials.split(separator: ":", maxSplits: 1).map(String.init)
-            guard parts.count == 2 else { return }
+            // 形如 demo:demo；Kotlin 端不支持 .map(String.init) 的转译写法
+            let parts = credentials.components(separatedBy: ":")
+            guard parts.count >= 2 else { return }
             Task { try? await login(account: parts[0], password: parts[1]) }
+        }
+    }
+
+    /// 探测主控可达性（网络错误归一；Kotlin 端不允许对已声明 val 二次赋值，故用辅助方法返回元组）
+    private func probe(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await URLSession.shared.data(for: request)
+        } catch {
+            if APIError.from(error).isCancelled { throw APIError.cancelled }
+            throw APIError.network("无法连接该地址：\(error.localizedDescription)")
         }
     }
 
@@ -89,14 +100,9 @@ final class AppState: ObservableObject {
         request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await URLSession.shared.data(for: request)
-        } catch {
-            if APIError.from(error).isCancelled { throw APIError.cancelled }
-            throw APIError.network("无法连接该地址：\(error.localizedDescription)")
-        }
+        let outcome = try await probe(request)
+        let data = outcome.0
+        let response = outcome.1
 
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         // 主控对未登录请求会返回 401 + 统一包裹；只要能解析出 code 字段即认定为主控
@@ -117,7 +123,14 @@ final class AppState: ObservableObject {
         if !value.lowercased().hasPrefix("http://") && !value.lowercased().hasPrefix("https://") {
             value = "http://" + value
         }
-        while value.hasSuffix("/") { value.removeLast() }
+        while value.hasSuffix("/") {
+            #if SKIP
+            // Kotlin 的 String 没有 removeLast（SkipLib 提供的是 dropLast）
+            value = value.dropLast()
+            #else
+            value.removeLast()
+            #endif
+        }
         return value
     }
 
@@ -151,7 +164,8 @@ final class AppState: ObservableObject {
             let center = try await api.fetchUserCenter()
             user = center.user
         } catch {
-            if case APIError.server(let message) = error, message.contains("未登录") {
+            // 令牌失效（主控返回「未登录」）时自动登出，回到登录页
+            if APIError.from(error).localizedDescription.contains("未登录") {
                 logout()
             }
         }
