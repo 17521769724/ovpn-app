@@ -10,6 +10,9 @@ import android.view.inputmethod.InputMethodManager
  */
 object KeyboardBridge {
 
+    /** Swift 侧以 `KeyboardBridge.shared` 形式访问（Skip 转译约定） */
+    val shared: KeyboardBridge get() = this
+
     fun dismiss() {
         val activity = AppEnv.currentActivity ?: return
         val manager = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager ?: return

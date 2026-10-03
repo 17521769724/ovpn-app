@@ -25,6 +25,76 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: 下载并打包 OpenVPN 2.6 内核（内置进 EXE）
+        shell: pwsh
+        run: |
+          # 与服务端 2.6 同版本的内核，随 EXE 以嵌入资源形式交付（开箱即用，无需另装 OpenVPN）
+          $urls = @(
+            "https://swupdate.openvpn.org/community/releases/OpenVPN-2.6.13-I001-amd64.msi",
+            "https://swupdate.openvpn.org/community/releases/OpenVPN-2.6.12-I001-amd64.msi",
+            "https://swupdate.openvpn.org/community/releases/OpenVPN-2.6.10-I001-amd64.msi",
+            "https://swupdate.openvpn.org/community/releases/OpenVPN-2.6.9-I001-amd64.msi"
+          )
+          $msi = Join-Path $env:RUNNER_TEMP "openvpn.msi"
+          $ok = $false
+          foreach ($u in $urls) {
+            try {
+              Invoke-WebRequest -Uri $u -OutFile $msi -UseBasicParsing -TimeoutSec 180
+              Write-Host "已下载：$u"
+              $ok = $true; break
+            } catch { Write-Host "下载失败：$u -> $($_.Exception.Message)" }
+          }
+
+          $bin = $null
+          $extract = Join-Path $env:RUNNER_TEMP "ovpn-extract"
+          if ($ok) {
+            if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+            $p = Start-Process msiexec -ArgumentList "/a `"$msi`" /qn TARGETDIR=`"$extract`"" -Wait -PassThru
+            if ($p.ExitCode -eq 0) {
+              $exe = Get-ChildItem -Path $extract -Recurse -Filter openvpn.exe -File | Select-Object -First 1
+              if ($exe) { $bin = $exe.Directory.FullName }
+            } else {
+              Write-Host "msiexec 解包失败：$($p.ExitCode)"
+            }
+          }
+
+          # 兜底：MSI 下载/解包失败时用 Chocolatey 安装后取文件
+          if (-not $bin) {
+            Write-Host "改用 Chocolatey 安装 OpenVPN"
+            choco install openvpn --no-progress -y
+            foreach ($candidate in @("C:\Program Files\OpenVPN\bin", "C:\Program Files (x86)\OpenVPN\bin")) {
+              if (Test-Path (Join-Path $candidate "openvpn.exe")) { $bin = $candidate; break }
+            }
+          }
+          if (-not $bin) { throw "未能获取 OpenVPN 内核文件" }
+          Write-Host "内核目录：$bin"
+          Get-ChildItem $bin | Format-Table Name, Length
+
+          $stage = Join-Path $env:RUNNER_TEMP "ovpn-stage"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path (Join-Path $stage "bin") | Out-Null
+
+          # 运行所需文件：openvpn.exe + 依赖 DLL（含 wintun.dll）+ tapctl.exe
+          foreach ($f in @("openvpn.exe", "tapctl.exe")) {
+            $src = Join-Path $bin $f
+            if (Test-Path $src) { Copy-Item $src (Join-Path $stage "bin") -Force }
+          }
+          Get-ChildItem $bin -Filter *.dll | ForEach-Object { Copy-Item $_.FullName (Join-Path $stage "bin") -Force }
+
+          # TAP 驱动（Wintun 不可用时的兜底驱动文件）
+          $driverFiles = Get-ChildItem -Path (Split-Path $bin -Parent) -Recurse -Include OemVista.inf, tap0901.sys, tap0901.cat -File -ErrorAction SilentlyContinue
+          if (-not $driverFiles) { $driverFiles = Get-ChildItem -Path $extract -Recurse -Include OemVista.inf, tap0901.sys, tap0901.cat -File -ErrorAction SilentlyContinue }
+          if ($driverFiles) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $stage "driver") | Out-Null
+            $driverFiles | ForEach-Object { Copy-Item $_.FullName (Join-Path $stage "driver") -Force }
+            Write-Host "已打包 TAP 驱动：$($driverFiles.Count) 个文件"
+          }
+
+          $zip = "windows/OVPNPanel.Wpf/openvpn.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -Force
+          Write-Host ("openvpn.zip：{0:N1} MB" -f ((Get-Item $zip).Length / 1MB))
+
       - name: 构建并截图（窗口自渲染）
         continue-on-error: true
         shell: pwsh
@@ -42,9 +112,9 @@ jobs:
 
           dotnet build "windows/OVPNPanel.Wpf/OVPNPanel.Wpf.csproj" -c Release -p:CiSmoke=true -o out/smoke
           $exe = (Resolve-Path "out/smoke/OVPNPanel.exe").Path
-          $common = @("-masterURL","http://127.0.0.1:8788","-autoLogin","demo:demo","-noProxy","-winSize","430,760","-theme","light","-shotDelay","6000")
+          $common = @("-masterURL","http://127.0.0.1:8788","-autoLogin","demo:demo","-noProxy","-winSize","1040,780","-theme","light","-shotDelay","6000")
           $shots = @(
-            @{ n = "setup"; a = @("-winSize","430,760","-theme","light","-shotDelay","2500") },
+            @{ n = "setup"; a = @("-winSize","1040,780","-theme","light","-shotDelay","2500") },
             @{ n = "tab0";  a = ($common + @("-startTab","0")) },
             @{ n = "tab1";  a = ($common + @("-startTab","1")) },
             @{ n = "tab2";  a = ($common + @("-startTab","2")) },
@@ -79,6 +149,10 @@ jobs:
           $exe = "out/release/OVPNPanel.exe"
           if (!(Test-Path $exe)) { throw "未生成 OVPNPanel.exe" }
           (Get-Item $exe).VersionInfo | Format-List FileVersion, ProductName
+          Write-Host ("EXE 大小：{0:N1} MB" -f ((Get-Item $exe).Length / 1MB))
+          $names = [System.Reflection.Assembly]::LoadFile((Resolve-Path $exe)).GetManifestResourceNames()
+          Write-Host "嵌入资源：$($names -join ', ')"
+          if (!($names -contains "OVPNPanel.openvpn.zip")) { throw "EXE 未内置 OpenVPN 内核（openvpn.zip）" }
 
       - name: 上传 EXE 产物
         if: always()

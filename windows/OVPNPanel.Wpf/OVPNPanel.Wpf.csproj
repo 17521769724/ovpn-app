@@ -33,6 +33,13 @@
     <!-- 全部为 .NET Framework 自带程序集：最终产物是单一 EXE，无需随附 DLL -->
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Security" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('openvpn.zip')">
+    <!-- 内置 OpenVPN 2.6 内核（CI 下载官方发行包后打包；本地调试无该文件时自动跳过） -->
+    <EmbeddedResource Include="openvpn.zip" LogicalName="OVPNPanel.openvpn.zip" />
   </ItemGroup>
 
 </Project>

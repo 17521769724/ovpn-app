@@ -374,6 +374,30 @@ struct VLine: View {
     }
 }
 
+/// 纯文本链接（登录页底部「注册新账号 / 找回密码 / 更换主控」等入口）。
+///
+/// iOS 用 `Button` + `PlainButtonStyle`；Android 的 Material 按键自带最小尺寸与内边距，
+/// 多个入口排在一行时会整体偏移、看起来不居中，因此改用纯文本 + 点击手势，两端排版一致。
+struct LinkText: View {
+    let title: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        #if SKIP
+        Text(title)
+            .font(DS.Font.bodySmall)
+            .foregroundStyle(color)
+            .onTapGesture { action() }
+        #else
+        Button(title, action: action)
+            .buttonStyle(PlainButtonStyle())
+            .font(DS.Font.bodySmall)
+            .foregroundStyle(color)
+        #endif
+    }
+}
+
 /// 分段切换（流量 近 7 天 / 近 15 天）
 /// 固定分段宽度 + 固定字重 + 无位移动画：文字不可能被压缩/截断（避免「近15天」显示成「15」）
 struct SegmentedTabs: View {
@@ -536,7 +560,8 @@ struct NodeStatusBadge: View {
 
     var body: some View {
         let palette = Palette(scheme: scheme)
-        let (text, bg, fg): (String, Color, Color) = {
+        // 元组先赋给带类型标注的变量再解构：Kotlin 不允许在解构声明上写类型标注
+        let resolved: (String, Color, Color) = {
             switch status {
             case "online": return ("在线", palette.onlineBg, palette.onlineText)
             case "disabled": return ("已停用", palette.pendingBg, palette.pendingText)
@@ -544,6 +569,7 @@ struct NodeStatusBadge: View {
             default: return ("离线", palette.offlineBg, palette.offlineText)
             }
         }()
+        let (text, bg, fg) = resolved
         StatusBadge(text: text, background: bg, foreground: fg)
     }
 }
@@ -572,7 +598,7 @@ struct StatBar: View {
                     Capsule().fill(palette.muted)
                     Capsule()
                         .fill(palette.accentGradient)
-                        .frame(width: max(0, min(1, value / 100)) * geo.size.width)
+                        .frame(width: max(0.0, min(1.0, value / 100)) * geo.size.width)
                         .animation(.easeOut(duration: 0.5), value: value)
                 }
             }
@@ -678,7 +704,8 @@ struct BannerBar: View {
 
     var body: some View {
         let palette = Palette(scheme: scheme)
-        let (bg, fg, icon): (Color, Color, String) = {
+        // 元组先赋给带类型标注的变量再解构：Kotlin 不允许在解构声明上写类型标注
+        let resolved: (Color, Color, String) = {
             switch kind {
             case .error: return (palette.offlineBg, palette.offlineText, "exclamationmark.circle")
             case .warning: return (palette.warningBg, palette.warningText, "info.circle")
@@ -686,6 +713,7 @@ struct BannerBar: View {
             case .info: return (palette.muted, palette.secondaryText, "info.circle")
             }
         }()
+        let (bg, fg, icon) = resolved
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: icon).font(.system(size: 13))
             Text(message).font(DS.Font.caption)

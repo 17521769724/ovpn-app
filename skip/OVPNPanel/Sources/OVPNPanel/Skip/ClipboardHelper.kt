@@ -11,6 +11,9 @@ import android.os.Looper
  */
 object ClipboardHelper {
 
+    /** Swift 侧以 `ClipboardHelper.shared` 形式访问（Skip 转译约定） */
+    val shared: ClipboardHelper get() = this
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun copy(text: String) {

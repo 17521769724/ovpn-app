@@ -85,7 +85,7 @@ namespace OVPNPanel
         }
     }
 
-    /// <summary>主窗口：固定手机端纵向版式，保证与 iOS / Android 客户端的观感一致</summary>
+    /// <summary>主窗口：桌面版式（左侧导航 + 居中内容列），配色与功能与移动端保持一致</summary>
     public class MainWindow : Window
     {
         readonly MainShell _shell;
@@ -95,8 +95,8 @@ namespace OVPNPanel
             Title = "OVPN 面板";
             Width = DS.Size.WindowWidth;
             Height = DS.Size.WindowHeight;
-            MinWidth = 380;
-            MinHeight = 620;
+            MinWidth = 860;
+            MinHeight = 640;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Ui.B(AppTheme.Palette.Background);
             UseLayoutRounding = true;

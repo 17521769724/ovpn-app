@@ -171,7 +171,7 @@ struct HomeView: View {
             Text(showingServerPicker ? "第 1 步" : "第 2 步")
                 .font(DS.Font.caption)
                 .foregroundStyle(palette.mutedForeground)
-            VLine(height: 10)
+            VLine(height: 10.0)
             Text(showingServerPicker ? "选择服务器" : "选择线路并连接")
                 .font(DS.Font.caption)
                 .foregroundStyle(palette.mutedForeground)
@@ -225,7 +225,7 @@ struct HomeView: View {
     private func speedTile(_ palette: Palette, title: String,
                            primary: String, primaryIcon: String,
                            secondary: String, secondaryIcon: String) -> some View {
-        AppCard(padding: 14) {
+        AppCard(padding: 14.0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "speedometer")
@@ -255,7 +255,7 @@ struct HomeView: View {
     }
 
     private func trafficTile(_ palette: Palette) -> some View {
-        AppCard(padding: 14) {
+        AppCard(padding: 14.0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "chart.bar.fill")
@@ -271,7 +271,7 @@ struct HomeView: View {
                     Text("↑ \(Format.bytes(sessionRx))")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(DS.IconColor.green)
-                    VLine(height: 9)
+                    VLine(height: 9.0)
                     Text("↓ \(Format.bytes(sessionTx))")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(DS.IconColor.teal)
@@ -455,7 +455,7 @@ struct HomeView: View {
                     Text("↑ \(Format.bytes(node.rxRateValue))/s")
                         .font(DS.Font.caption)
                         .foregroundStyle(DS.IconColor.green)
-                    VLine(height: 10)
+                    VLine(height: 10.0)
                     Text("↓ \(Format.bytes(node.txRateValue))/s")
                         .font(DS.Font.caption)
                         .foregroundStyle(DS.IconColor.teal)
@@ -523,7 +523,7 @@ struct HomeView: View {
                                         .lineLimit(1).truncationMode(.middle)
                                 }
                                 if node.displayIPv4 != nil && node.displayIPv6 != nil {
-                                    VLine(height: 9)
+                                    VLine(height: 9.0)
                                 }
                                 if let v6 = node.displayIPv6 {
                                     Text(v6)
@@ -566,7 +566,7 @@ struct HomeView: View {
                     ChipButton(title: "全部", selected: category == "全部") {
                         withAnimation(Animation.spring(response: 0.3, dampingFraction: 0.85)) { category = "全部" }
                     }
-                    VLine(height: 16)
+                    VLine(height: 16.0)
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -651,7 +651,7 @@ struct HomeView: View {
                     .font(DS.Font.bodySmall)
                     .foregroundStyle(palette.secondaryText)
                     .lineLimit(1)
-                VLine(height: 10)
+                VLine(height: 10.0)
                 Text(line.name)
                     .font(DS.Font.bodySmall)
                     .foregroundStyle(palette.secondaryText)

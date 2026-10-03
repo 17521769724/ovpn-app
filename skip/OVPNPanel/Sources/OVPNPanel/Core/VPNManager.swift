@@ -1,5 +1,9 @@
 import Foundation
 
+// Skip：`ObservableObject` / `@Published` 由 SkipUI（SwiftUI 的 Android 实现）提供，
+// 缺少该 import 时转译出的 Kotlin 类会因找不到 ObservableObject 而编译失败。
+import SwiftUI
+
 #if SKIP
 // Skip：Android 侧通过 Kotlin 桥接 OpenVPN 3 内核（见 Android 模块 VpnBridge.kt）
 import com.ovpn.panel.VpnBridge
@@ -180,16 +184,14 @@ final class VPNManager: ObservableObject {
     private func syncStatus() {
         let previous = status
         #if SKIP
-        // Android：状态与标题由 VpnBridge 维护
-        if let bridgeStatus = VpnBridge.shared.currentStatus {
-            status = bridgeStatus
-        } else {
-            status = .disconnected
-        }
+        // Android：状态与标题由 Kotlin VpnBridge 维护，统一走 applyBridgeStatus
+        // （连接时间 / 会话清理等收尾逻辑与 iOS 完全复用）
+        applyBridgeStatus(VpnBridge.shared.currentStatus)
         let bridgeTitle = VpnBridge.shared.activeTitle
         if activeServerName.isEmpty, !bridgeTitle.isEmpty {
             applyTitle(bridgeTitle)
         }
+        return
         #else
         if let manager {
             status = VpnStatus(manager.connection.status)
@@ -246,7 +248,10 @@ final class VPNManager: ObservableObject {
         // 复用与 iOS 相同的收尾逻辑（连接时间、会话清理）
         if status == .connected {
             hasLikelyOpenSession = true
-            if let systemDate = VpnBridge.shared.connectedAt {
+            // Kotlin 侧以 Unix 秒（Double）传递连接建立时间，避免 Date 跨语言桥接类型不一致
+            let epoch = VpnBridge.shared.connectedAtEpoch
+            if epoch > 0.0 {
+                let systemDate = Date(timeIntervalSince1970: epoch)
                 connectedAt = systemDate
                 storedConnectedAt = systemDate
             } else if let stored = storedConnectedAt {

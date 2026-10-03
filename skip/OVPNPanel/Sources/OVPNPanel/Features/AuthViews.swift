@@ -121,14 +121,14 @@ struct LoginView: View {
                 }
 
                 HStack(spacing: 14) {
-                    Button("注册新账号") { showRegister = true }
-                    VLine(height: 10)
-                    Button("找回密码") { showForgot = true }
-                    VLine(height: 10)
-                    Button("更换主控") { showMasterSheet = true }
+                    LinkText(title: "注册新账号", color: palette.foreground) { showRegister = true }
+                    VLine(height: 10.0)
+                    LinkText(title: "找回密码", color: palette.foreground) { showForgot = true }
+                    VLine(height: 10.0)
+                    LinkText(title: "更换主控", color: palette.foreground) { showMasterSheet = true }
                 }
-                .font(DS.Font.bodySmall)
-                .foregroundStyle(palette.foreground)
+                // 整行完全居中（LinkText 在 Android 侧不带按钮内边距，见 Components.swift）
+                .frame(maxWidth: .infinity, alignment: .center)
 
                 Spacer(minLength: 20)
             }

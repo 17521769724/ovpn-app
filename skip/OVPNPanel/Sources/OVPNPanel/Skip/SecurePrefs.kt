@@ -11,6 +11,9 @@ import android.content.Context
  */
 object SecurePrefs {
 
+    /** Swift 侧以 `SecurePrefs.shared` 形式访问（Skip 转译约定） */
+    val shared: SecurePrefs get() = this
+
     private const val FILE_NAME = "ovpn_secure_store"
 
     private val prefs by lazy {

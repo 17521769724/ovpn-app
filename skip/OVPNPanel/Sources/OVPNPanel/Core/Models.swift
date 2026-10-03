@@ -2,13 +2,6 @@ import Foundation
 
 // MARK: - 通用
 
-/// 主控统一响应包裹 { code, message, data }
-struct Envelope<T: Decodable>: Decodable {
-    let code: Int
-    let message: String
-    let data: T?
-}
-
 /// APP 端用户信息（对应主控 buildAppUserPayload）
 struct AppUser: Decodable {
     let id: Int

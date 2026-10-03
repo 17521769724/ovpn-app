@@ -33,7 +33,7 @@ struct ProfileView: View {
 
                     HStack(spacing: 8) {
                         Text("客户端 v\(AppInfo.version) (Build \(AppInfo.build))")
-                        VLine(height: 10)
+                        VLine(height: 10.0)
                         Text(app.masterURL).lineLimit(1).truncationMode(.middle)
                     }
                     .font(DS.Font.caption)
@@ -73,7 +73,7 @@ struct ProfileView: View {
 
     /// 三格资产条：与下方「流量使用」保持同一卡片底色，仅用彩色图标区分
     private func assetsStrip(_ palette: Palette) -> some View {
-        AppCard(padding: 0) {
+        AppCard(padding: 0.0) {
             HStack(spacing: 0) {
                 assetCell(palette, icon: "star.circle.fill", color: DS.IconColor.teal,
                           title: "等级", value: "Lv.\(app.user?.levelValue ?? 1)")
@@ -221,7 +221,7 @@ struct ProfileView: View {
                                 LinearGradient(colors: [DS.Traffic.bar, DS.Traffic.barStrong],
                                                startPoint: .leading, endPoint: .trailing)
                             )
-                            .frame(width: max(0, min(1, percent / 100)) * geo.size.width)
+                            .frame(width: max(0.0, min(1.0, percent / 100)) * geo.size.width)
                     }
                 }
                 .frame(height: 8)
@@ -327,7 +327,7 @@ struct ProfileView: View {
     // MARK: - 功能入口（彩色图标 + 整行可点）
 
     private func menuCard(_ palette: Palette) -> some View {
-        AppCard(padding: 0) {
+        AppCard(padding: 0.0) {
             VStack(spacing: 0) {
                 menuRow(palette, icon: "megaphone.fill", color: DS.IconColor.rose, title: "公告",
                         badge: unreadCount > 0 ? "\(unreadCount)" : nil,
@@ -443,14 +443,14 @@ struct TrafficBars: View {
                     GeometryReader { geo in
                         let total = CGFloat(day.totalBytes) / CGFloat(maxValue)
                         let rxRatio = day.totalBytes > 0 ? CGFloat(day.rxBytes) / CGFloat(max(day.totalBytes, 1)) : 0.5
-                        let height = max(2, geo.size.height * total)
+                        let height = max(2.0, geo.size.height * total)
                         VStack(spacing: 1) {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(DS.Traffic.bar)
-                                .frame(height: max(1, height * (1 - rxRatio)))
+                                .frame(height: max(1.0, height * (1 - rxRatio)))
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(DS.Traffic.barSoft)
-                                .frame(height: max(1, height * rxRatio))
+                                .frame(height: max(1.0, height * rxRatio))
                         }
                         .frame(maxHeight: .infinity, alignment: .bottom)
                     }

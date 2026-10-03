@@ -257,7 +257,7 @@ namespace OVPNPanel.Core
         public Screen Top { get { return _host.Top; } }
     }
 
-    /// <summary>主界面：底部四个 Tab，各自维护独立导航栈</summary>
+    /// <summary>主界面：左侧竖向导航（桌面版式）+ 右侧内容区，各自维护独立导航栈</summary>
     public class TabsView : Grid
     {
         readonly Grid _content = new Grid();
@@ -272,21 +272,63 @@ namespace OVPNPanel.Core
         static readonly string[] IconNames = { "tabLines", "tabPlans", "tabInvite", "tabProfile" };
         static readonly Color[] Colors = { DS.IconColor.Green, DS.IconColor.Teal, DS.IconColor.Lime, DS.IconColor.Cyan };
 
+        /// <summary>桌面版式：左侧导航宽度</summary>
+        const double SidebarWidth = 208;
+
         public TabsView()
         {
-            RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            // 桌面版式：左侧竖向导航栏 + 右侧内容区（内容保持与移动端一致的视觉语言与配色）
+            ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            Grid.SetRow(_content, 0);
+            var palette = Ui.P;
+
+            var sidebarGrid = new Grid { Background = Ui.B(palette.Background) };
+            sidebarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(SidebarWidth) });
+            sidebarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var sidebar = new Grid();
+            sidebar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            sidebar.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            // 品牌区：圆角渐变图标 + 名称（与登录页品牌块同一视觉语言）
+            var logo = new Border
+            {
+                Width = 34,
+                Height = 34,
+                CornerRadius = new CornerRadius(10),
+                Background = new LinearGradientBrush(palette.Primary, DS.IconColor.Teal, 45),
+                Child = new Grid { Children = { Ui.Icon("shieldFill", 17, Colors.White, 2) } },
+            };
+            var brandText = Ui.Text("OVPN 面板", 15, FontWeights.SemiBold, palette.Foreground);
+            brandText.VerticalAlignment = VerticalAlignment.Center;
+            brandText.Margin = new Thickness(10, 0, 0, 0);
+            var brandStack = Ui.Stack(Orientation.Horizontal, 0, logo, brandText);
+            brandStack.VerticalAlignment = VerticalAlignment.Center;
+            var brand = new Border { Child = brandStack, Padding = new Thickness(16, 20, 16, 14) };
+            Grid.SetRow(brand, 0);
+            sidebar.Children.Add(brand);
+
+            _tabBar = Ui.Stack(Orientation.Vertical, 4);
+            _tabBar.Margin = new Thickness(10, 0, 10, 12);
+            Grid.SetRow(_tabBar, 1);
+            sidebar.Children.Add(_tabBar);
+
+            Grid.SetColumn(sidebar, 0);
+            sidebarGrid.Children.Add(sidebar);
+
+            var divider = new Rectangle
+            {
+                Width = 1,
+                Fill = Ui.B(palette.Border),
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            Grid.SetColumn(divider, 1);
+            sidebarGrid.Children.Add(divider);
+
+            Children.Add(sidebarGrid);
+            Grid.SetColumn(_content, 1);
             Children.Add(_content);
-
-            _tabBar = Ui.Stack(Orientation.Horizontal, 0);
-            _tabBar.Background = Ui.B(Ui.P.Background);
-            var barBorder = new Border { Child = _tabBar };
-            var line = new Rectangle { Height = 1, Fill = Ui.B(Ui.P.Border), VerticalAlignment = VerticalAlignment.Top };
-            var barGrid = new Grid { Children = { barBorder, line } };
-            Grid.SetRow(barGrid, 1);
-            Children.Add(barGrid);
 
             BuildTabs();
             Select(_current, false);
@@ -298,22 +340,23 @@ namespace OVPNPanel.Core
             for (int i = 0; i < Titles.Length; i++)
             {
                 int index = i;
-                var icon = Ui.Icon(IconNames[i], 19, palette.MutedForeground, 1.8);
-                icon.HorizontalAlignment = HorizontalAlignment.Center;
-                var label = Ui.Text(Titles[i], 11, FontWeights.Normal, palette.MutedForeground);
-                label.HorizontalAlignment = HorizontalAlignment.Center;
-                label.Margin = new Thickness(0, 3, 0, 0);
+                var icon = Ui.Icon(IconNames[i], 18, palette.MutedForeground, 1.8);
+                icon.VerticalAlignment = VerticalAlignment.Center;
+                var label = Ui.Text(Titles[i], 14, FontWeights.Normal, palette.MutedForeground);
+                label.VerticalAlignment = VerticalAlignment.Center;
+                label.Margin = new Thickness(10, 0, 0, 0);
 
-                var stack = Ui.Stack(Orientation.Vertical, 0, icon, label);
-                stack.HorizontalAlignment = HorizontalAlignment.Center;
+                var stack = Ui.Stack(Orientation.Horizontal, 0, icon, label);
                 stack.VerticalAlignment = VerticalAlignment.Center;
+                stack.Margin = new Thickness(12, 0, 0, 0);
 
                 var surface = new PressSurface
                 {
                     Child = stack,
-                    Height = DS.Size.TabBarHeight,
+                    Height = 44,
+                    CornerRadius = new CornerRadius(10),
+                    Background = Brushes.Transparent,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Width = DS.Size.ContentMaxWidth / 4.0,
                 };
                 surface.Clicked += () => Select(index, true);
                 _tabSurfaces.Add(surface);
@@ -364,6 +407,7 @@ namespace OVPNPanel.Core
                 _tabIcons[i].StrokeThickness = active ? 2.2 : 1.8;
                 _tabLabels[i].Foreground = Ui.B(active ? palette.Foreground : palette.MutedForeground);
                 _tabLabels[i].FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
+                _tabSurfaces[i].Background = active ? Ui.B(palette.Muted) : Brushes.Transparent;
                 var scale = active ? 1.06 : 1.0;
                 if (animated)
                 {

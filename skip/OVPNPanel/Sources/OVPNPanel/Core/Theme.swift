@@ -7,7 +7,10 @@ enum DS {
     // MARK: - 十六进制颜色
     /// Skip 无法把扩展合并进模块外的 `Color` 类型，故以本项目内的工厂函数代替
     /// `extension Color { init(hex:) }`，两端行为一致。
-    static func hex(_ value: UInt32, alpha: Double = 1) -> Color {
+    ///
+    /// 参数类型为 `Int`（而非 `UInt32`）：Kotlin 侧整型字面量默认是 `Int`，
+    /// 若声明为 `UInt32` 会转译成 `UInt` 导致所有 `DS.hex(0xFFFFFF)` 调用类型不匹配。
+    static func hex(_ value: Int, alpha: Double = 1) -> Color {
         Color(
             red: Double((value >> 16) & 0xFF) / 255,
             green: Double((value >> 8) & 0xFF) / 255,
@@ -40,14 +43,16 @@ enum DS {
     }
 
     // MARK: - 字号
+    /// 字重必须写成 `SwiftUI.Font.Weight.xxx`（全限定名）：
+    /// 枚举名为 `Font`，转译出的 Kotlin 里 `Font.Weight` 会被解析成 `DS.Font`（自身）而找不到 Weight。
     enum Font {
-        static let title = SwiftUI.Font.system(size: 20, weight: .semibold)
-        static let section = SwiftUI.Font.system(size: 15, weight: .semibold)
+        static let title = SwiftUI.Font.system(size: 20, weight: SwiftUI.Font.Weight.semibold)
+        static let section = SwiftUI.Font.system(size: 15, weight: SwiftUI.Font.Weight.semibold)
         static let body = SwiftUI.Font.system(size: 15)
         static let bodySmall = SwiftUI.Font.system(size: 13)
         static let caption = SwiftUI.Font.system(size: 12)
-        static let value = SwiftUI.Font.system(size: 13, weight: .regular)  // 列表右侧数值（柔化，避免过重）
-        static let number = SwiftUI.Font.system(size: 15, weight: .medium)
+        static let value = SwiftUI.Font.system(size: 13, weight: SwiftUI.Font.Weight.regular)  // 列表右侧数值（柔化，避免过重）
+        static let number = SwiftUI.Font.system(size: 15, weight: SwiftUI.Font.Weight.medium)
     }
 
     // MARK: - 品牌色（绿色为主，配青绿 / 黄绿 / 冷青 / 琥珀等协调辅助色）
@@ -126,32 +131,34 @@ enum DS {
         let icon: String
 
         static func of(_ kind: BannerKind, dark: Bool) -> ToastStyle {
-            switch (kind, dark) {
-            case (.success, false):
-                return ToastStyle(background: DS.hex( 0xECFDF5), border: DS.hex( 0xA7F3D0),
-                                  foreground: DS.hex( 0x047857), icon: "checkmark.circle.fill")
-            case (.success, true):
-                return ToastStyle(background: DS.hex( 0x001A0F), border: DS.hex( 0x065F46),
-                                  foreground: DS.hex( 0x4ADE80), icon: "checkmark.circle.fill")
-            case (.error, false):
-                return ToastStyle(background: DS.hex( 0xFEF2F2), border: DS.hex( 0xFECACA),
-                                  foreground: DS.hex( 0xE7000B), icon: "octagon.fill")
-            case (.error, true):
-                return ToastStyle(background: DS.hex( 0x2D0607), border: DS.hex( 0x7F1D1D),
-                                  foreground: DS.hex( 0xFF9B9D), icon: "octagon.fill")
-            case (.warning, false):
-                return ToastStyle(background: DS.hex( 0xFEFCE8), border: DS.hex( 0xFEF08A),
-                                  foreground: DS.hex( 0xB45309), icon: "exclamationmark.triangle.fill")
-            case (.warning, true):
-                return ToastStyle(background: DS.hex( 0x1C1A00), border: DS.hex( 0x854D0E),
-                                  foreground: DS.hex( 0xFCD34D), icon: "exclamationmark.triangle.fill")
-            case (.info, false):
-                return ToastStyle(background: DS.hex( 0xF0F9FF), border: DS.hex( 0xBAE6FD),
-                                  foreground: DS.hex( 0x0369A1), icon: "info.circle.fill")
-            case (.info, true):
-                return ToastStyle(background: DS.hex( 0x001B33), border: DS.hex( 0x1E40AF),
-                                  foreground: DS.hex( 0x60A5FA), icon: "info.circle.fill")
+            // 用 if/else 而非 (kind, dark) 元组 switch：Kotlin 的 when 无法判定元组分支已穷尽，
+            // 缺少 else 时会报 "Missing return statement"
+            if kind == .success {
+                return dark
+                    ? ToastStyle(background: DS.hex( 0x001A0F), border: DS.hex( 0x065F46),
+                                 foreground: DS.hex( 0x4ADE80), icon: "checkmark.circle.fill")
+                    : ToastStyle(background: DS.hex( 0xECFDF5), border: DS.hex( 0xA7F3D0),
+                                 foreground: DS.hex( 0x047857), icon: "checkmark.circle.fill")
             }
+            if kind == .error {
+                return dark
+                    ? ToastStyle(background: DS.hex( 0x2D0607), border: DS.hex( 0x7F1D1D),
+                                 foreground: DS.hex( 0xFF9B9D), icon: "octagon.fill")
+                    : ToastStyle(background: DS.hex( 0xFEF2F2), border: DS.hex( 0xFECACA),
+                                 foreground: DS.hex( 0xE7000B), icon: "octagon.fill")
+            }
+            if kind == .warning {
+                return dark
+                    ? ToastStyle(background: DS.hex( 0x1C1A00), border: DS.hex( 0x854D0E),
+                                 foreground: DS.hex( 0xFCD34D), icon: "exclamationmark.triangle.fill")
+                    : ToastStyle(background: DS.hex( 0xFEFCE8), border: DS.hex( 0xFEF08A),
+                                 foreground: DS.hex( 0xB45309), icon: "exclamationmark.triangle.fill")
+            }
+            return dark
+                ? ToastStyle(background: DS.hex( 0x001B33), border: DS.hex( 0x1E40AF),
+                             foreground: DS.hex( 0x60A5FA), icon: "info.circle.fill")
+                : ToastStyle(background: DS.hex( 0xF0F9FF), border: DS.hex( 0xBAE6FD),
+                             foreground: DS.hex( 0x0369A1), icon: "info.circle.fill")
         }
     }
 

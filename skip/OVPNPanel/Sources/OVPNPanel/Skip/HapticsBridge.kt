@@ -16,6 +16,9 @@ import android.os.VibratorManager
  */
 object HapticsBridge {
 
+    /** Swift 侧以 `HapticsBridge.shared` 形式访问（Skip 转译约定） */
+    val shared: HapticsBridge get() = this
+
     private fun vibrator(): Vibrator? {
         val context = AppEnv.appContext
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

@@ -25,6 +25,9 @@ import java.util.Date
  */
 object VpnBridge {
 
+    /** Swift 侧以 `VpnBridge.shared` 形式访问（Skip 转译约定） */
+    val shared: VpnBridge get() = this
+
     /** 与 Swift 侧 `VpnStatus` 的字符串约定：connected / connecting / disconnecting / reasserting / invalid / disconnected */
     private const val S_DISCONNECTED = "disconnected"
     private const val S_CONNECTING = "connecting"
@@ -61,6 +64,15 @@ object VpnBridge {
 
     /** 连接建立时间（Swift 侧用于计算已连接时长并持久化） */
     val connectedAt: Date? get() = connectedAtValue
+
+    /**
+     * 连接建立时间的 Unix 秒（0 表示未连接）。
+     *
+     * Swift 侧改用该值构造 `Date(timeIntervalSince1970:)`：
+     * `java.util.Date` 与 Swift `Date` 的跨语言桥接类型不一致（只能得到 Any），
+     * 用 Double 传递可避免类型不匹配的转译错误。
+     */
+    val connectedAtEpoch: Double get() = connectedAtValue?.time?.let { it / 1000.0 } ?: 0.0
 
     /** 当前连接的「服务器 ｜ 线路」标题，用于页面重建后恢复展示 */
     val activeTitle: String get() = activeTitleValue

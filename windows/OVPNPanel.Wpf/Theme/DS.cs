@@ -46,10 +46,10 @@ namespace OVPNPanel.Theme
             public const double Gap = 12;
             public const double GapLarge = 16;
             public const double TabBarHeight = 54;
-            /// <summary>桌面端内容列的最大宽度（保持与手机端一致的纵向版式）</summary>
-            public const double ContentMaxWidth = 430;
-            public const double WindowWidth = 460;
-            public const double WindowHeight = 880;
+            /// <summary>桌面端内容列的最大宽度（宽屏下居中展示，保持纵向版式与三端一致的视觉语言）</summary>
+            public const double ContentMaxWidth = 620;
+            public const double WindowWidth = 1040;
+            public const double WindowHeight = 780;
         }
 
         /// <summary>字号（三端一致：title 20 / section 15 / body 15 / bodySmall 13 / caption 12）</summary>

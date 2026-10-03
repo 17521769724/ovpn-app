@@ -683,7 +683,7 @@ struct RechargeView: View {
     @State private var paying = false
     @State private var payURL: String?
 
-    private let quickAmounts: [Double] = [10, 30, 50, 100, 200, 500]
+    private let quickAmounts: [Double] = [10.0, 30.0, 50.0, 100.0, 200.0, 500.0]
 
     /// 快捷金额按每行 3 个分行（Skip 不支持自定义 Layout，两端统一使用等分换行）
     private var quickAmountRows: [[Double]] {
@@ -700,7 +700,7 @@ struct RechargeView: View {
         return rows
     }
 
-    private var amountYuan: Double { Double(amountText.trimmingCharacters(in: .whitespaces)) ?? 0 }
+    private var amountYuan: Double { Double(amountText.trimmingCharacters(in: .whitespaces)) ?? 0.0 }
 
     var body: some View {
         let palette = Palette(scheme: scheme)

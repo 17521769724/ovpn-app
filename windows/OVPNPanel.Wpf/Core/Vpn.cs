@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -172,7 +174,7 @@ namespace OVPNPanel.Core
                 _status = VpnStatus.Disconnected;
                 Raise();
                 throw new InvalidOperationException(
-                    "未检测到 OpenVPN 客户端，请先安装 OpenVPN（或在本程序目录放置 openvpn.exe）后重试");
+                    "内置 OpenVPN 内核不可用，且系统未安装 OpenVPN，请重新下载客户端或安装 OpenVPN 后重试");
             }
 
             _status = VpnStatus.Connecting;
@@ -198,7 +200,7 @@ namespace OVPNPanel.Core
                 {
                     FileName = exe,
                     Arguments = "--config \"" + configFile + "\" --auth-user-pass \"" + authFile + "\""
-                                + " --auth-nocache",
+                                + " --auth-nocache" + DriverArgument(exe),
                     WorkingDirectory = _workDir,
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -300,13 +302,89 @@ namespace OVPNPanel.Core
             SyncStatus();
         }
 
+        // MARK: - 内置 OpenVPN 2.6 内核（随 EXE 打包，开箱即用）
+
+        /// <summary>内置内核解包目录：%LOCALAPPDATA%\OVPNPanel\openvpn（bin / driver 子目录）</summary>
+        static string BundledDir
+        {
+            get
+            {
+                return Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "OVPNPanel", "openvpn");
+            }
+        }
+
+        static string BundledExe { get { return Path.Combine(BundledDir, "bin", "openvpn.exe"); } }
+
+        /// <summary>
+        /// 把随 EXE 打包的 OpenVPN 2.6 内核（嵌入资源 openvpn.zip）解包到本地目录。
+        /// 返回 openvpn.exe 完整路径；未内置内核（如自编译调试版）时返回 null。
+        /// </summary>
+        public static string EnsureBundledOpenVpn()
+        {
+            try
+            {
+                if (File.Exists(BundledExe)) return BundledExe;
+
+                var assembly = Assembly.GetExecutingAssembly();
+                using (var stream = assembly.GetManifestResourceStream("OVPNPanel.openvpn.zip"))
+                {
+                    if (stream == null) return null;
+
+                    var root = Path.GetFullPath(BundledDir);
+                    Directory.CreateDirectory(root);
+                    using (var archive = new ZipArchive(stream, ZipArchiveMode.Read))
+                    {
+                        foreach (var entry in archive.Entries)
+                        {
+                            if (string.IsNullOrEmpty(entry.Name)) continue; // 目录项
+                            var target = Path.GetFullPath(Path.Combine(root, entry.FullName));
+                            // 防目录穿越（zip 内路径异常时直接跳过）
+                            if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
+                            var parent = Path.GetDirectoryName(target);
+                            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                            entry.ExtractToFile(target, true);
+                        }
+                    }
+                }
+                return File.Exists(BundledExe) ? BundledExe : null;
+            }
+            catch
+            {
+                // 解包失败（磁盘权限等）：静默回退到「程序目录 / 系统安装 / PATH」
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 附加驱动参数：内置内核自带 wintun.dll 时优先使用 Wintun 虚拟网卡
+        /// （免安装内核驱动，首次连接无需任何额外操作；不可用时回退系统 TAP 驱动）。
+        /// </summary>
+        static string DriverArgument(string exe)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(exe);
+                if (!string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir, "wintun.dll")))
+                {
+                    return " --windows-driver wintun";
+                }
+            }
+            catch { }
+            return "";
+        }
+
         // MARK: - openvpn.exe 定位
 
-        /// <summary>按「用户指定 → 程序目录 → 常见安装目录 → PATH」顺序探测</summary>
+        /// <summary>按「用户指定 → 内置内核 → 程序目录 → 常见安装目录 → PATH」顺序探测</summary>
         public static string LocateOpenVpn()
         {
             var configured = LocalStore.OpenVpnPath;
             if (!string.IsNullOrEmpty(configured) && File.Exists(configured)) return configured;
+
+            var bundled = EnsureBundledOpenVpn();
+            if (!string.IsNullOrEmpty(bundled)) return bundled;
 
             var candidates = new List<string>();
             var appDir = AppDomain.CurrentDomain.BaseDirectory;

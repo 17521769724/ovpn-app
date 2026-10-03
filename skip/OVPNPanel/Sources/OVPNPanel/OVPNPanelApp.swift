@@ -18,7 +18,6 @@ public struct OVPNPanelRootView: View {
     public var body: some View {
         RootView()
             .environmentObject(app)
-            .preferredColorScheme(nil)
     }
 }
 
