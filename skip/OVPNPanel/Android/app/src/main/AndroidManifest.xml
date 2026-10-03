@@ -3,8 +3,11 @@
   OVPN 客户端 · Skip Android 模块清单
 
   说明：
-  - `.AndroidAppMain` 与 `.MainActivity` 由 Skip 的 skip-build-plugin 在构建期生成，
-    分别对应 SwiftUI 的 `@main App` 与承载 Compose 内容的宿主 Activity。
+  - 进程入口 `AndroidAppMain` 与宿主 Activity `MainActivity` 由本工程提供
+    （见 src/main/kotlin/Main.kt，Skip 官方模板约定，Skip 不会自动生成）。
+    这里写**完整类名**而不是 `.Xxx`：Skip 构建插件会把以点开头的相对类名
+    按转译模块的 Kotlin 包展开，写全名可避免与 Kotlin 源码包名不一致导致
+    「启动即 ClassNotFoundException」。
   - VPN 能力由 `io.github.tim06:openvpn`（OpenVPN 3 内核）提供，
     其 VpnService 与 `BIND_VPN_SERVICE` 权限通过库自带清单自动合并。
 -->
@@ -33,7 +36,7 @@
     </queries>
 
     <application
-        android:name=".AndroidAppMain"
+        android:name="ovpnpanel.module.AndroidAppMain"
         android:label="OVPN"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
@@ -45,13 +48,13 @@
           ContentProvider 在 Application.onCreate 之前实例化，是最可靠的初始化入口。
         -->
         <provider
-            android:name=".AppEnvInitializer"
+            android:name="com.ovpn.panel.AppEnvInitializer"
             android:authorities="${applicationId}.appenv"
             android:exported="false" />
 
         <!-- 承载 Skip 转译后 Compose 界面的宿主 Activity -->
         <activity
-            android:name=".MainActivity"
+            android:name="ovpnpanel.module.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|fontScale|fontWeightAdjustment|keyboard|layoutDirection|locale|mcc|navigation|smallestScreenSize|touchscreen|uiMode"

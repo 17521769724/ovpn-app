@@ -127,6 +127,27 @@ jobs:
           "$BT/aapt" dump badging "$GITHUB_WORKSPACE/dist-android/OVPNPanel-android.apk" \
             | grep -E "^package|sdkVersion|targetSdkVersion|application-label" || true
 
+      - name: 校验入口类（防止「安装后启动闪退」）
+        working-directory: ${{ env.SKIP_APP_DIR }}
+        run: |
+          set -e
+          # Skip 不会自动生成 AndroidAppMain / MainActivity（见 Android/app/src/main/kotlin/Main.kt），
+          # 一旦缺失，APK 安装后启动即 ClassNotFoundException，这里直接让构建失败。
+          APK="$GITHUB_WORKSPACE/dist-android/OVPNPanel-android.apk"
+          rm -rf /tmp/apkdex && mkdir -p /tmp/apkdex
+          unzip -q -o "$APK" 'classes*.dex' -d /tmp/apkdex
+          MISSING=0
+          for cls in ovpnpanel.module.AndroidAppMain ovpnpanel.module.MainActivity com.ovpn.panel.AppEnvInitializer; do
+            if strings /tmp/apkdex/*.dex | grep -q "L${cls//./\/};"; then
+              echo "OK   $cls"
+            else
+              echo "::error::APK 缺少入口类 $cls —— 安装后会启动闪退"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" != "0" ]; then exit 1; fi
+          echo "入口类校验通过"
+
       - name: 上传 APK 产物
         uses: actions/upload-artifact@v4
         with:
