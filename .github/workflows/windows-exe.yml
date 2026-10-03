@@ -90,10 +90,43 @@ jobs:
             Write-Host "已打包 TAP 驱动：$($driverFiles.Count) 个文件"
           }
 
+          # Wintun 虚拟网卡（OpenVPN 2.6 的默认驱动；msiexec /a 解包不会释放该组件，需单独补齐）
+          $wintun = Get-ChildItem -Path $extract -Recurse -Filter wintun.dll -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $wintun) {
+            $wintunZip = Join-Path $env:RUNNER_TEMP "wintun.zip"
+            foreach ($u in @("https://www.wintun.net/builds/wintun-0.14.1.zip",
+                             "https://www.wintun.net/builds/wintun-0.14.zip")) {
+              try {
+                Invoke-WebRequest -Uri $u -OutFile $wintunZip -UseBasicParsing -TimeoutSec 120
+                Write-Host "已下载 Wintun：$u"; break
+              } catch { Write-Host "下载失败：$u -> $($_.Exception.Message)" }
+            }
+            if (Test-Path $wintunZip) {
+              $wintunDir = Join-Path $env:RUNNER_TEMP "wintun"
+              if (Test-Path $wintunDir) { Remove-Item $wintunDir -Recurse -Force }
+              Expand-Archive -Path $wintunZip -DestinationPath $wintunDir -Force
+              $wintun = Get-ChildItem -Path $wintunDir -Recurse -Filter wintun.dll -File |
+                        Where-Object { $_.FullName -match "amd64" } | Select-Object -First 1
+            }
+          }
+          if ($wintun) {
+            Copy-Item $wintun.FullName (Join-Path $stage "bin\wintun.dll") -Force
+            Write-Host "已打包 Wintun 驱动：$($wintun.FullName)"
+          } else {
+            Write-Host "::warning::未获取到 wintun.dll，连接将回退系统 TAP 驱动"
+          }
+
           $zip = "windows/OVPNPanel.Wpf/openvpn.zip"
           if (Test-Path $zip) { Remove-Item $zip -Force }
           Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -Force
           Write-Host ("openvpn.zip：{0:N1} MB" -f ((Get-Item $zip).Length / 1MB))
+
+          # 校验内置内核完整性（缺 wintun.dll 时连接会失败，这里直接让构建失败以便及时发现）
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $entries = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip)).Entries | ForEach-Object { $_.FullName }
+          Write-Host "openvpn.zip 条目：$($entries -join ', ')"
+          if (-not ($entries -contains "bin/openvpn.exe")) { throw "openvpn.zip 缺少 openvpn.exe" }
+          if (-not ($entries -contains "bin/wintun.dll")) { throw "openvpn.zip 缺少 wintun.dll（OpenVPN 2.6 默认驱动）" }
 
       - name: 构建并截图（窗口自渲染）
         continue-on-error: true
