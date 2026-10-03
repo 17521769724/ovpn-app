@@ -107,11 +107,27 @@ struct PressableStyle: ButtonStyle {
 
 // MARK: - 页面容器
 
+/// 收起键盘：向当前第一响应者发送 resignFirstResponder，全局生效。
+enum Keyboard {
+    static func dismiss() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
+    }
+}
+
 struct PageBackground: ViewModifier {
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
-        Palette(scheme: scheme).background.ignoresSafeArea().overlay(content)
+        Palette(scheme: scheme).background
+            .ignoresSafeArea()
+            // 点击空白处收起键盘：交互控件（输入框/按钮）自行消费点击，
+            // 未被消费的点击落到最底层背景上触发收起。
+            .contentShape(Rectangle())
+            .onTapGesture { Keyboard.dismiss() }
+            .overlay(content)
     }
 }
 

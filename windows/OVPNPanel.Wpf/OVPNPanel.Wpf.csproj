@@ -7,9 +7,9 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>OVPNPanel</RootNamespace>
     <AssemblyName>OVPNPanel</AssemblyName>
-    <Version>1.2.6</Version>
-    <AssemblyVersion>1.2.6.0</AssemblyVersion>
-    <FileVersion>1.2.6.0</FileVersion>
+    <Version>1.2.7</Version>
+    <AssemblyVersion>1.2.7.0</AssemblyVersion>
+    <FileVersion>1.2.7.0</FileVersion>
     <LangVersion>7.3</LangVersion>
     <StartupObject>OVPNPanel.Program</StartupObject>
     <!-- 正式交付：requireAdministrator（建立隧道需创建虚拟网卡）；CI 截图：asInvoker -->
