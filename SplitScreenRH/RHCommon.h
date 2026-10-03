@@ -38,6 +38,13 @@
 #define RH_STATE_FILE_NAME @"com.roothide.splitscreenrh.state.plist"
 #define RH_SNAP_FILE_NAME  @"com.roothide.splitscreenrh.snapshot.png"
 
+// 前台应用上报（App -> SpringBoard）：
+//   主通道 = 各 App 自身容器（沙盒内必定可写），SpringBoard 遍历读取；
+//   加速通道 = /var/tmp（沙盒允许时更省事）；Darwin 通知仅作为“有新数据”的信号。
+#define RH_FG_FILE_NAME  @"com.roothide.splitscreenrh.fg.plist"
+#define RH_FG_TMP_PREFIX @"com.roothide.splitscreenrh.fg-"
+#define RH_FG_MAX_AGE    300.0
+
 typedef NS_ENUM(NSInteger, RHEdgeMode) {
     RHEdgeModeBoth  = 0,
     RHEdgeModeLeft  = 1,
@@ -88,9 +95,10 @@ UIWindowScene *RHMainWindowScene(void);
 CGSize RHScreenSize(void);
 BOOL RHIsDeviceLocked(void);
 
-NSString *RHForegroundBundleID(void);
-void RHSetForegroundBundleID(NSString *bundleID);
+NSString *RHResolveForegroundBundleID(void); // 跨进程解析当前前台应用（文件上报 + 私有 API 兜底）
 NSString *RHProbeForegroundBundleID(void);   // 私有 API 兜底探测
+void RHReportForegroundState(NSString *bundleID, BOOL active); // App 侧上报自身前台状态
+NSArray<NSString *> *RHAllAppContainerPaths(void);             // 全部 App 数据容器路径（带缓存）
 
 BOOL RHAppExists(NSString *bundleID);
 BOOL RHLaunchApp(NSString *bundleID);

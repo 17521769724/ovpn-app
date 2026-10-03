@@ -251,10 +251,94 @@ BOOL RHIsDeviceLocked(void) {
     return NO;
 }
 
-static NSString *gForegroundBundleID = nil;
-NSString *RHForegroundBundleID(void) { return gForegroundBundleID; }
-void RHSetForegroundBundleID(NSString *bundleID) {
-    gForegroundBundleID = [bundleID copy];
+#pragma mark - 前台应用跟踪（跨进程，文件上报 + 私有 API 兜底）
+
+// App 侧：把自己的前台/后台状态写入自身容器（必定可写）与 /var/tmp（若沙盒允许）
+void RHReportForegroundState(NSString *bundleID, BOOL active) {
+    if (bundleID.length == 0) return;
+    NSDictionary *info = @{ @"bundle": bundleID,
+                            @"active": @(active),
+                            @"time": @([[NSDate date] timeIntervalSince1970]) };
+
+    NSString *cacheDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Caches"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:cacheDir
+                              withIntermediateDirectories:YES attributes:nil error:NULL];
+    [info writeToFile:[cacheDir stringByAppendingPathComponent:RH_FG_FILE_NAME] atomically:YES];
+
+    NSString *tmpName = [RH_FG_TMP_PREFIX stringByAppendingFormat:@"%@.plist", bundleID];
+    [info writeToFile:[@"/var/tmp" stringByAppendingPathComponent:tmpName] atomically:YES];
+}
+
+// SpringBoard 侧：缓存全部 App 的数据容器路径（约 10 分钟刷新一次）
+static NSArray<NSString *> *gContainerPaths = nil;
+static NSTimeInterval gContainerPathsTime = 0;
+
+NSArray<NSString *> *RHAllAppContainerPaths(void) {
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    if (gContainerPaths && (now - gContainerPathsTime) < 600.0) return gContainerPaths;
+
+    NSMutableArray<NSString *> *paths = [NSMutableArray array];
+    Class wsClass = NSClassFromString(@"LSApplicationWorkspace");
+    id workspace = RHClassMsgId(wsClass, @"defaultWorkspace");
+    SEL allSel = NSSelectorFromString(@"allInstalledApplications");
+    if (workspace && [workspace respondsToSelector:allSel]) {
+        @try {
+            NSArray *proxies = RH_MSG_ID(workspace, allSel);
+            for (id proxy in proxies) {
+                @try {
+                    id url = RHInstanceMsgId(proxy, @"dataContainerURL");
+                    if ([url isKindOfClass:[NSURL class]]) {
+                        NSString *path = [(NSURL *)url path];
+                        if (path.length) [paths addObject:path];
+                    }
+                } @catch (__unused NSException *e) {}
+            }
+        } @catch (__unused NSException *e) {}
+    }
+    gContainerPaths = paths;
+    gContainerPathsTime = now;
+    return gContainerPaths;
+}
+
+// 读取所有上报记录，返回时间最新的一条
+static NSDictionary *RHNewestForegroundReport(void) {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSDictionary *best = nil;
+
+    // 加速通道：/var/tmp
+    NSArray<NSString *> *tmpNames = [fm contentsOfDirectoryAtPath:@"/var/tmp" error:NULL];
+    for (NSString *name in tmpNames) {
+        if (![name hasPrefix:RH_FG_TMP_PREFIX]) continue;
+        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:
+                              [@"/var/tmp" stringByAppendingPathComponent:name]];
+        if (![dict isKindOfClass:[NSDictionary class]]) continue;
+        if (!best || [dict[@"time"] doubleValue] > [best[@"time"] doubleValue]) best = dict;
+    }
+
+    // 主通道：各 App 自身容器
+    for (NSString *container in RHAllAppContainerPaths()) {
+        NSString *path = [[container stringByAppendingPathComponent:@"Library/Caches"]
+                          stringByAppendingPathComponent:RH_FG_FILE_NAME];
+        if (![fm fileExistsAtPath:path]) continue;
+        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:path];
+        if (![dict isKindOfClass:[NSDictionary class]]) continue;
+        if (!best || [dict[@"time"] doubleValue] > [best[@"time"] doubleValue]) best = dict;
+    }
+    return best;
+}
+
+NSString *RHResolveForegroundBundleID(void) {
+    NSDictionary *report = RHNewestForegroundReport();
+    if (report) {
+        NSTimeInterval age = [[NSDate date] timeIntervalSince1970] - [report[@"time"] doubleValue];
+        if (age <= RH_FG_MAX_AGE) {
+            NSString *bundleID = report[@"bundle"];
+            if (![bundleID isKindOfClass:[NSString class]] || bundleID.length == 0) return nil;
+            return [report[@"active"] boolValue] ? bundleID : nil;
+        }
+    }
+    // 兜底：私有 API 探测
+    return RHProbeForegroundBundleID();
 }
 
 NSString *RHBundleIDFromObject(id object) {

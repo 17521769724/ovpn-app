@@ -78,10 +78,6 @@ static void RHDarwinNotifyCallback(CFNotificationCenterRef center,
                                              selector:@selector(orientationChanged)
                                                  name:UIDeviceOrientationDidChangeNotification
                                                object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(settingsChangedInternal)
-                                                 name:@"RHSettingsChangedInternal"
-                                               object:nil];
 
     [self setupWhenReady];
 }
@@ -99,10 +95,6 @@ static void RHDarwinNotifyCallback(CFNotificationCenterRef center,
                    dispatch_get_main_queue(), ^{
         [wself setupWhenReady];
     });
-}
-
-- (void)settingsChangedInternal {
-    [self reloadEdgeWindows];
 }
 
 #pragma mark - 边缘手势
@@ -193,6 +185,15 @@ static void RHDarwinNotifyCallback(CFNotificationCenterRef center,
     UIWindowScene *scene = RHMainWindowScene();
     if (!scene) return;
 
+    // 如果当前正停留在设置页，先关闭它，避免窗口泄漏
+    if (self.overlayWindow) [self closeOverlayWindow];
+
+    // 自愈：清理超过 60 秒的过期会话（例如目标应用未被注入时残留的状态）
+    RHFloatState *stale = [RHFloatState current];
+    if (stale.floating && ([[NSDate date] timeIntervalSince1970] - stale.timestamp) > 60.0) {
+        [stale clear];
+    }
+
     RHWatchPanelController *panel = [[RHWatchPanelController alloc] init];
     panel.apps = RHAddedApps();
 
@@ -261,6 +262,8 @@ static void RHDarwinNotifyCallback(CFNotificationCenterRef center,
         [wself closeOverlayWindow];
     };
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:root];
+    nav.view.backgroundColor = [UIColor colorWithWhite:0.07 alpha:0.98];
+    nav.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     window.rootViewController = nav;
 }
 
@@ -279,8 +282,7 @@ static void RHDarwinNotifyCallback(CFNotificationCenterRef center,
 - (void)openAppInFloating:(NSString *)bundleID {
     if (bundleID.length == 0) return;
 
-    NSString *foreground = RHForegroundBundleID();
-    if (foreground.length == 0) foreground = RHProbeForegroundBundleID();
+    NSString *foreground = RHResolveForegroundBundleID();
     if ([foreground isEqualToString:bundleID]) {   // 已经在前台，无需分屏
         [self dismissPanel];
         return;
@@ -301,15 +303,15 @@ static void RHDarwinNotifyCallback(CFNotificationCenterRef center,
 
     [self dismissPanel];
 
-    __weak typeof(self) wself = self;
+    // 同步写入会话状态，确保目标应用启动时一定能读到；
+    // 快照体积较大，放到后台编码后再启动应用
+    [state save];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        [state save];
         if (snapshot) [state writeSnapshot:snapshot];
         dispatch_async(dispatch_get_main_queue(), ^{
             if (!RHLaunchApp(bundleID)) {
                 [state clear];
             }
-            (void)wself;
         });
     });
 }
@@ -317,27 +319,24 @@ static void RHDarwinNotifyCallback(CFNotificationCenterRef center,
 #pragma mark - 跨进程通知处理
 
 - (void)handleDarwinNotification:(NSString *)name userInfo:(NSDictionary *)userInfo {
-    if ([name isEqualToString:RHNotifyAppActive]) {
-        NSString *bundleID = userInfo[@"bundle"];
-        if (![bundleID isKindOfClass:[NSString class]] || bundleID.length == 0) return;
-        RHSetForegroundBundleID(bundleID);
+    // 注意：Darwin 通知跨进程不携带 payload，这里仅作为“有新数据”的信号，
+    //       真正的数据通过共享文件（App 容器 / /var/tmp）读取。
+    (void)userInfo;
 
-        // 小窗应用尚未就绪时，另一个应用抢占了前台：清掉过期会话
+    if ([name isEqualToString:RHNotifyAppActive] || [name isEqualToString:RHNotifyAppInactive]) {
+        // 前台应用发生变化：若小窗应用外的其他应用成为前台，说明会话已失效，清理之
         RHFloatState *state = [RHFloatState current];
-        if (state.floating && state.bundleID.length && ![state.bundleID isEqualToString:bundleID]) {
+        if (!state.floating || state.bundleID.length == 0) return;
+        NSString *foreground = RHResolveForegroundBundleID();
+        if (foreground.length > 0 && ![foreground isEqualToString:state.bundleID]) {
             [state clear];
         }
-    } else if ([name isEqualToString:RHNotifyAppInactive]) {
-        NSString *bundleID = userInfo[@"bundle"];
-        if (![bundleID isKindOfClass:[NSString class]]) return;
-        if ([RHForegroundBundleID() isEqualToString:bundleID]) RHSetForegroundBundleID(nil);
     } else if ([name isEqualToString:RHNotifyCloseFloat]) {
-        // 小窗已关闭：需要把原应用拉回前台（或停留在桌面）
-        NSString *home = userInfo[@"home"];
+        // 小窗已关闭：把原应用拉回前台（为空则停留桌面）
         RHFloatState *state = [RHFloatState current];
+        NSString *home = state.homeBundleID;
         [state clear];
-        RHSetForegroundBundleID(nil);
-        if ([home isKindOfClass:[NSString class]] && home.length > 0) {
+        if (home.length > 0) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
                 RHLaunchApp(home);

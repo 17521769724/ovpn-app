@@ -1,0 +1,10 @@
+Package: com.roothide.splitscreenrh
+Name: SplitScreenRH
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: 小窗分屏插件 —— iWatch 表盘式应用面板，边缘滑动唤出，点击即以小窗打开任意应用；支持圆角/尺寸/缩放/移动，关闭小窗保留后台。
+Maintainer: SplitScreenRH
+Author: SplitScreenRH
+Section: Tweaks
+Depends: mobilesubstrate | ellekit
+Installed-Size: 396
