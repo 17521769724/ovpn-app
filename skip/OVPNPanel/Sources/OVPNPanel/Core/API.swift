@@ -115,8 +115,11 @@ final class APIClient {
     /// 执行请求并返回 data 段。
     ///
     /// Kotlin 泛型在运行时被擦除：泛型函数内既不能用 `T.self` 解码（转译成 `T::class` 会报
-    /// reified 错误），`Envelope<T>` 也无法在自身 init 里解码 T。因此这里只负责统一解包
+    /// reified 错误），也无法让泛型包裹类型在自身 init 中解码 T。因此这里只负责统一解包
     /// 与错误归一，具体类型的解析通过 `decode` 闭包在调用点完成（见 Services.swift）。
+    ///
+    /// 解包改用 `JSONSerialization`（Skip 的 JSON 值即 Swift 值），避免自定义 Decodable
+    /// 包裹类型在转译时被误解析成 companion 成员访问而编译失败。
     func request<T: Decodable>(
         _ path: String,
         method: String = "GET",
@@ -132,18 +135,22 @@ final class APIClient {
 
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
-        guard let envelope = try? APIClient.apiDecoder().decode(Envelope.self, from: data) else {
+        guard let json = try? JSONSerialization.jsonObject(with: data),
+              let root = json as? [String: Any] else {
             if statusCode == 200 {
                 throw APIError.decoding("响应不是合法的 JSON")
             }
             throw APIError.server("主控返回异常（HTTP \(statusCode)）")
         }
 
-        if envelope.code != 0 {
-            throw APIError.server(envelope.message.isEmpty ? "请求失败" : envelope.message)
+        let code = root["code"] as? Int ?? -1
+        let message = root["message"] as? String ?? ""
+        if code != 0 {
+            throw APIError.server(message.isEmpty ? "请求失败" : message)
         }
-        guard let payload = envelope.data else {
-            // data 为空但需要返回值的场景（requestVoid → EmptyPayload）
+
+        guard let payload = root["data"], !(payload is NSNull) else {
+            // data 缺失或为 null：无返回体请求（requestVoid → EmptyPayload）
             #if SKIP
             // Kotlin 泛型运行时擦除，无法做 `as? T` 判断；该分支仅 EmptyPayload 场景会走到
             return EmptyPayload() as! T
@@ -153,7 +160,7 @@ final class APIClient {
             #endif
         }
         do {
-            let raw = try JSONSerialization.data(withJSONObject: payload.value)
+            let raw = try JSONSerialization.data(withJSONObject: payload)
             return try decode(raw)
         } catch {
             throw APIError.decoding(error.localizedDescription)
@@ -172,49 +179,3 @@ final class APIClient {
 }
 
 struct EmptyPayload: Decodable {}
-
-/// 主控统一响应包裹 { code, message, data }
-///
-/// 非泛型设计：`data` 先按任意 JSON 值解析，具体类型由调用点在 `request(decode:)`
-/// 的闭包里按确切类型解析（Kotlin 泛型擦除导致 `Envelope<T>` 无法在自身 init 中解码 T）。
-struct Envelope: Decodable {
-    let code: Int
-    let message: String
-    let data: AnyCodableValue?
-}
-
-/// 任意 JSON 值包装（用于先解包再按目标类型解析）
-struct AnyCodableValue: Decodable {
-    let value: Any
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if container.decodeNil() {
-            value = NSNull()
-        } else if let bool = try? container.decode(Bool.self) {
-            value = bool
-        } else if let int = try? container.decode(Int.self) {
-            value = int
-        } else if let double = try? container.decode(Double.self) {
-            value = double
-        } else if let string = try? container.decode(String.self) {
-            value = string
-        } else if let array = try? container.decode([AnyCodableValue].self) {
-            // 用显式循环而非 `array.map { $0.value }`：转译后的 Kotlin 会把闭包内的成员访问
-            // 误解析成 companion 访问（`it.companionObjectInstance`）而编译失败
-            var items: [Any] = []
-            for item in array {
-                items.append(item.value)
-            }
-            value = items
-        } else if let dict = try? container.decode([String: AnyCodableValue].self) {
-            var items: [String: Any] = [:]
-            for (key, item) in dict {
-                items[key] = item.value
-            }
-            value = items
-        } else {
-            value = NSNull()
-        }
-    }
-}

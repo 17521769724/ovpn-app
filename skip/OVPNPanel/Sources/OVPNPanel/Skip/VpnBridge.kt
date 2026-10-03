@@ -62,13 +62,10 @@ object VpnBridge {
     /** 当前状态（Swift 侧 `syncStatus()` 读取） */
     val currentStatus: String get() = statusValue
 
-    /** 连接建立时间（Swift 侧用于计算已连接时长并持久化） */
-    val connectedAt: Date? get() = connectedAtValue
-
     /**
      * 连接建立时间的 Unix 秒（0 表示未连接）。
      *
-     * Swift 侧改用该值构造 `Date(timeIntervalSince1970:)`：
+     * Swift 侧统一用该值构造 `Date(timeIntervalSince1970:)`：
      * `java.util.Date` 与 Swift `Date` 的跨语言桥接类型不一致（只能得到 Any），
      * 用 Double 传递可避免类型不匹配的转译错误。
      */

@@ -82,7 +82,7 @@ struct ProfileView: View {
                           title: "金币", value: "\(app.user?.coinsValue ?? 0)")
                 assetDivider(palette)
                 assetCell(palette, icon: "creditcard.fill", color: DS.IconColor.green,
-                          title: "余额", value: String(format: "%.2f", app.user?.balanceYuanValue ?? 0))
+                          title: "余额", value: String(format: "%.2f", app.user?.balanceYuanValue ?? 0.0))
             }
             .padding(.vertical, 14)
         }
@@ -198,7 +198,7 @@ struct ProfileView: View {
                 // 用量区：未就绪时以占位展示，保证首屏与加载完成后布局一致（无跳动）
                 let used = center?.traffic.usedBytes ?? 0
                 let limit = center?.traffic.limitBytes ?? 0
-                let percent = center?.traffic.percent ?? 0
+                let percent = center?.traffic.percent ?? 0.0
                 HStack(alignment: .firstTextBaseline) {
                     Text(center == nil ? "—" : Format.bytes(used))
                         .font(.system(size: 22, weight: .semibold))

@@ -182,17 +182,16 @@ final class VPNManager: ObservableObject {
     #endif
 
     private func syncStatus() {
-        let previous = status
         #if SKIP
-        // Android：状态与标题由 Kotlin VpnBridge 维护，统一走 applyBridgeStatus
-        // （连接时间 / 会话清理等收尾逻辑与 iOS 完全复用）
+        // Android：状态、连接时间与会话清理统一由 Kotlin VpnBridge → applyBridgeStatus 处理
+        // （applyBridgeStatus 复用与 iOS 完全相同的收尾逻辑，因此这里直接返回）
         applyBridgeStatus(VpnBridge.shared.currentStatus)
         let bridgeTitle = VpnBridge.shared.activeTitle
         if activeServerName.isEmpty, !bridgeTitle.isEmpty {
             applyTitle(bridgeTitle)
         }
-        return
         #else
+        let previous = status
         if let manager {
             status = VpnStatus(manager.connection.status)
             // 页面重建后从隧道配置恢复服务器 / 线路名称（标题格式：服务器 ｜ 线路）
@@ -202,17 +201,12 @@ final class VPNManager: ObservableObject {
         } else {
             status = .disconnected
         }
-        #endif
 
         // 连接建立时间：优先取系统隧道记录的时间（系统设置里建立的连接同样有效），
         // 并持久化，保证切换页面 / App 重启后计时不重置。
         if status == .connected {
             hasLikelyOpenSession = true
-            #if SKIP
-            let systemDate = VpnBridge.shared.connectedAt
-            #else
             let systemDate = manager?.connection.connectedDate
-            #endif
             if let systemDate {
                 connectedAt = systemDate
                 storedConnectedAt = systemDate
@@ -232,6 +226,7 @@ final class VPNManager: ObservableObject {
         if (status == .disconnected || status == .invalid) && wasActive {
             Task { await cleanupRemoteSessionsIfNeeded(force: true) }
         }
+        #endif
     }
 
     #if SKIP
