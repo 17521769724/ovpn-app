@@ -41,21 +41,15 @@ private typealias AppRootView = OVPNPanelRootView
 /// android.app.Application 入口：初始化 SkipFoundation（ProcessInfo）。
 /// 必须与 AndroidManifest 中 `<application android:name>` 对应。
 open class AndroidAppMain: Application() {
-    constructor()
-
     override fun onCreate() {
         super.onCreate()
         ProcessInfo.launch(applicationContext)
     }
-
-    companion object
 }
 
 /// 承载 Compose 界面的宿主 Activity：把 SwiftUI 根视图渲染出来。
 /// 必须与 AndroidManifest 中启动页 `<activity android:name>` 对应。
 open class MainActivity: AppCompatActivity() {
-    constructor()
-
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         UIApplication.launch(this)
@@ -69,12 +63,6 @@ open class MainActivity: AppCompatActivity() {
             }
         }
     }
-
-    override fun onResume() {
-        super.onResume()
-    }
-
-    companion object
 }
 
 /// 状态栏 / 导航栏跟随主题明暗（等价 iOS 的系统栏适配）
